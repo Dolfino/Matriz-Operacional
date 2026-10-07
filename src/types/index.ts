@@ -24,8 +24,10 @@ export interface Dependency {
   departmentOrOwner: string; // Ex: "Charles / Superintendência", "CEOP"
   status: DependencyStatus;
   severity: DependencySeverity;
-  requestDate?: string;
-  slaDeadline?: string;
+  startDate?: string; // Data Início / Solicitação da dependência
+  requestDate?: string; // Alias/retrocompatibilidade
+  endDate?: string; // Data Fim / Prazo SLA
+  slaDeadline?: string; // Alias/retrocompatibilidade
   notes?: string;
   followUps: FollowUpLog[];
   linkedSubtaskId?: string; // Subtarefa que depende disto
@@ -41,7 +43,9 @@ export interface Subtask {
   assignee?: string;
   ocNumber?: string;
   orderCost?: number;
-  dueDate?: string;
+  startDate?: string; // Data Início da subtarefa
+  dueDate?: string; // Data Fim / Prazo da subtarefa
+  endDate?: string; // Alias para sincronização de período
   notes?: string;
   isExternalDependency?: boolean; // Se marcado, avisa para migrar para dependência
 }
@@ -55,7 +59,9 @@ export interface Task {
   description?: string;
   category: TaskCategory;
   priority: 'high' | 'medium' | 'low';
-  deadline?: string;
+  startDate?: string; // Data Início da tarefa
+  deadline?: string; // Data Fim / Prazo final
+  endDate?: string; // Alias de período
   subtasks: Subtask[];
   dependencies: Dependency[];
 }
@@ -63,7 +69,9 @@ export interface Task {
 export interface Milestone {
   id: string;
   title: string; // Ex: "Infraestrutura contratada", "Espaço pronto"
-  targetDate?: string;
+  startDate?: string; // Data Início do marco
+  targetDate?: string; // Data Fim / Meta do marco
+  endDate?: string; // Alias de período
   description?: string;
   tasks: Task[];
 }
@@ -71,7 +79,9 @@ export interface Milestone {
 export interface Objective {
   id: string;
   title: string; // Ex: "Encerramento CFM — 03/10"
-  eventDate: string; // "2026-10-03"
+  startDate?: string; // Data Início do projeto/objetivo
+  eventDate: string; // "2026-10-03" (Data Fim / Evento)
+  endDate?: string; // Alias de período
   description?: string;
   category: string;
   status: 'active' | 'archived' | 'completed';

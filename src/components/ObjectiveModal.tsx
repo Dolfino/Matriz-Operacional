@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Plus, Calendar, Flag, Trash2 } from 'lucide-react';
+import { X, Plus, Calendar, Flag, Trash2, Layers } from 'lucide-react';
 import { Objective, Milestone } from '../types';
 
 interface ObjectiveModalProps {
@@ -16,16 +16,31 @@ export const ObjectiveModal: React.FC<ObjectiveModalProps> = ({
   initialObjective,
 }) => {
   const [title, setTitle] = useState(initialObjective?.title || '');
+  const [startDate, setStartDate] = useState(initialObjective?.startDate || '2026-09-15');
   const [eventDate, setEventDate] = useState(initialObjective?.eventDate || '2026-10-03');
   const [category, setCategory] = useState(initialObjective?.category || 'Evento Institucional');
   const [description, setDescription] = useState(initialObjective?.description || '');
   const [milestones, setMilestones] = useState<Milestone[]>(
     initialObjective?.milestones || [
-      { id: `mil-${Date.now()}-1`, title: 'Infraestrutura contratada', tasks: [] },
-      { id: `mil-${Date.now()}-2`, title: 'Espaço pronto', tasks: [] },
+      {
+        id: `mil-${Date.now()}-1`,
+        title: 'Infraestrutura contratada',
+        startDate: '2026-09-15',
+        targetDate: '2026-09-28',
+        tasks: [],
+      },
+      {
+        id: `mil-${Date.now()}-2`,
+        title: 'Espaço pronto',
+        startDate: '2026-09-28',
+        targetDate: '2026-10-02',
+        tasks: [],
+      },
     ]
   );
   const [newMilestoneTitle, setNewMilestoneTitle] = useState('');
+  const [newMilestoneStart, setNewMilestoneStart] = useState('');
+  const [newMilestoneTarget, setNewMilestoneTarget] = useState('');
 
   if (!isOpen) return null;
 
@@ -36,10 +51,15 @@ export const ObjectiveModal: React.FC<ObjectiveModalProps> = ({
       {
         id: `mil-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
         title: newMilestoneTitle.trim(),
+        startDate: newMilestoneStart || startDate,
+        targetDate: newMilestoneTarget || eventDate,
+        endDate: newMilestoneTarget || eventDate,
         tasks: [],
       },
     ]);
     setNewMilestoneTitle('');
+    setNewMilestoneStart('');
+    setNewMilestoneTarget('');
   };
 
   const handleRemoveMilestone = (id: string) => {
@@ -53,7 +73,9 @@ export const ObjectiveModal: React.FC<ObjectiveModalProps> = ({
     const saved: Objective = {
       id: initialObjective?.id || `obj-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
       title: title.trim(),
+      startDate: startDate || undefined,
       eventDate,
+      endDate: eventDate,
       category,
       description: description.trim(),
       status: 'active',
@@ -72,7 +94,7 @@ export const ObjectiveModal: React.FC<ObjectiveModalProps> = ({
           <div className="flex items-center gap-2">
             <Flag className="w-5 h-5 text-indigo-400" />
             <h3 className="font-bold text-base">
-              {initialObjective ? 'Editar Objetivo Operacional' : 'Novo Objetivo Operacional'}
+              {initialObjective ? 'Editar Objetivo / Projeto' : 'Novo Objetivo / Projeto'}
             </h3>
           </div>
           <button
@@ -87,7 +109,7 @@ export const ObjectiveModal: React.FC<ObjectiveModalProps> = ({
         <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4">
           <div>
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-              Nome do Objetivo <span className="text-red-500">*</span>
+              Nome do Objetivo / Projeto <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
@@ -99,10 +121,24 @@ export const ObjectiveModal: React.FC<ObjectiveModalProps> = ({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                Data do Evento / Meta
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center gap-1">
+                <Calendar className="w-3.5 h-3.5 text-indigo-500" />
+                Data de Início
+              </label>
+              <input
+                type="date"
+                required
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-slate-800 text-xs bg-white"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center gap-1">
+                <Calendar className="w-3.5 h-3.5 text-amber-500" />
+                Data Fim / Evento
               </label>
               <input
                 type="date"
@@ -142,7 +178,8 @@ export const ObjectiveModal: React.FC<ObjectiveModalProps> = ({
           {/* Marcos / Entregáveis */}
           <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+              <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                <Layers className="w-3.5 h-3.5 text-indigo-600" />
                 Marcos / Entregáveis ({milestones.length})
               </span>
             </div>
@@ -152,9 +189,16 @@ export const ObjectiveModal: React.FC<ObjectiveModalProps> = ({
                   key={m.id}
                   className="flex items-center justify-between gap-2 p-2 bg-white rounded-lg border border-slate-200 text-xs"
                 >
-                  <span className="font-semibold text-slate-800">
-                    {idx + 1}. {m.title}
-                  </span>
+                  <div className="flex-1 min-w-0">
+                    <span className="font-semibold text-slate-800 block truncate">
+                      {idx + 1}. {m.title}
+                    </span>
+                    {(m.startDate || m.targetDate) && (
+                      <span className="text-[10px] text-slate-500">
+                        {m.startDate ? m.startDate : 'Início'} ➔ {m.targetDate || m.endDate || 'Meta'}
+                      </span>
+                    )}
+                  </div>
                   <button
                     type="button"
                     onClick={() => handleRemoveMilestone(m.id)}
@@ -166,21 +210,39 @@ export const ObjectiveModal: React.FC<ObjectiveModalProps> = ({
               ))}
             </div>
 
-            <div className="flex gap-2 pt-1">
+            <div className="space-y-2 pt-1 border-t border-slate-200/60">
               <input
                 type="text"
                 value={newMilestoneTitle}
                 onChange={(e) => setNewMilestoneTitle(e.target.value)}
-                placeholder="Novo marco (ex: Espaço pronto, Credenciamento liberado)"
-                className="flex-1 px-3 py-1.5 text-xs rounded-lg border border-slate-300 bg-white"
+                placeholder="Nome do novo marco (ex: Espaço pronto, Credenciamento)"
+                className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 bg-white"
               />
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  type="date"
+                  value={newMilestoneStart}
+                  onChange={(e) => setNewMilestoneStart(e.target.value)}
+                  placeholder="Data Início"
+                  className="px-2.5 py-1 text-xs rounded-lg border border-slate-300 bg-white text-slate-700"
+                  title="Data Início do Marco"
+                />
+                <input
+                  type="date"
+                  value={newMilestoneTarget}
+                  onChange={(e) => setNewMilestoneTarget(e.target.value)}
+                  placeholder="Data Fim / Meta"
+                  className="px-2.5 py-1 text-xs rounded-lg border border-slate-300 bg-white text-slate-700"
+                  title="Data Fim / Meta do Marco"
+                />
+              </div>
               <button
                 type="button"
                 onClick={handleAddMilestone}
                 disabled={!newMilestoneTitle.trim()}
-                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold"
+                className="w-full py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition-colors"
               >
-                + Marco
+                + Adicionar Marco ao Objetivo
               </button>
             </div>
           </div>

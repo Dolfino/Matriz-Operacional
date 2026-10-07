@@ -14,8 +14,10 @@ import { TreeView } from './components/TreeView';
 import { DependenciesRadar } from './components/DependenciesRadar';
 import { TaskBoardView } from './components/TaskBoardView';
 import { OcManager } from './components/OcManager';
+import { MultiProjectGanttView } from './components/MultiProjectGanttView';
 import { TaskModal } from './components/TaskModal';
 import { ObjectiveModal } from './components/ObjectiveModal';
+import { MilestoneModal } from './components/MilestoneModal';
 import { GranularityCheckerModal } from './components/GranularityCheckerModal';
 import { FollowUpModal } from './components/FollowUpModal';
 import { ExecutiveSummaryModal } from './components/ExecutiveSummaryModal';
@@ -26,12 +28,15 @@ export default function App() {
     const list = loadObjectives();
     return list[0]?.id || 'obj-cfm-0310';
   });
-  const [activeTab, setActiveTab] = useState<'tree' | 'radar' | 'board' | 'ocs'>('tree');
+  const [activeTab, setActiveTab] = useState<'tree' | 'radar' | 'board' | 'ocs' | 'gantt'>('tree');
 
   // Modals state
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [targetMilestoneId, setTargetMilestoneId] = useState<string>('');
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+
+  const [isMilestoneModalOpen, setIsMilestoneModalOpen] = useState(false);
+  const [editingMilestone, setEditingMilestone] = useState<Milestone | null>(null);
 
   const [isObjectiveModalOpen, setIsObjectiveModalOpen] = useState(false);
   const [editingObjective, setEditingObjective] = useState<Objective | null>(null);
@@ -308,7 +313,10 @@ export default function App() {
 
     const newLog = {
       id: `flw-${Date.now()}`,
-      date: new Date().toLocaleDateString('pt-BR') + ' ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+      date:
+        new Date().toLocaleDateString('pt-BR') +
+        ' ' +
+        new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
       note,
       author: author || 'Operações',
     };
@@ -337,20 +345,29 @@ export default function App() {
     );
   };
 
-  // Milestone Actions
-  const handleAddMilestone = () => {
-    const title = prompt('Digite o nome do novo marco / entregável (ex: Credenciamento liberado):');
-    if (!title?.trim() || !currentObjective) return;
+  // Milestone Actions with Date Period Support
+  const handleOpenMilestoneModal = (milestone?: Milestone) => {
+    setEditingMilestone(milestone || null);
+    setIsMilestoneModalOpen(true);
+  };
 
-    const newM: Milestone = {
-      id: `mil-${Date.now()}`,
-      title: title.trim(),
-      tasks: [],
-    };
+  const handleSaveMilestone = (milestone: Milestone) => {
+    if (!currentObjective) return;
+
+    const existingIdx = currentObjective.milestones.findIndex((m) => m.id === milestone.id);
+    let updatedMilestones: Milestone[];
+
+    if (existingIdx >= 0) {
+      updatedMilestones = currentObjective.milestones.map((m) =>
+        m.id === milestone.id ? { ...milestone, tasks: m.tasks } : m
+      );
+    } else {
+      updatedMilestones = [...currentObjective.milestones, milestone];
+    }
 
     const updatedObjective: Objective = {
       ...currentObjective,
-      milestones: [...currentObjective.milestones, newM],
+      milestones: updatedMilestones,
     };
 
     setObjectives((prev) =>
@@ -434,7 +451,7 @@ export default function App() {
 
   // Utilities
   const handleResetDefault = () => {
-    if (confirm('Deseja restaurar os dados para o exemplo inicial do Encerramento CFM — 03/10?')) {
+    if (confirm('Deseja restaurar os dados com os projetos de exemplo (Encerramento CFM e Congresso Nacional)?')) {
       const def = resetToDefault();
       setObjectives(def);
       setCurrentObjectiveId(def[0].id);
@@ -470,53 +487,69 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* Banner with the Operational Granularity Rule */}
-        <GranularityRuleBanner onOpenChecker={() => setIsCheckerModalOpen(true)} />
+        {/* Banner with the Operational Granularity Rule (hidden on Gantt to maximize viewport) */}
+        {activeTab !== 'gantt' && (
+          <GranularityRuleBanner onOpenChecker={() => setIsCheckerModalOpen(true)} />
+        )}
 
-        {currentObjective ? (
-          <>
-            {activeTab === 'tree' && (
-              <TreeView
-                objective={currentObjective}
-                onOpenTaskModal={handleOpenTaskModal}
-                onDeleteTask={handleDeleteTask}
-                onToggleSubtask={handleToggleSubtask}
-                onReorderSubtasks={handleReorderSubtasks}
-                onMoveSubtask={handleMoveSubtask}
-                onOpenFollowUpModal={handleOpenFollowUpModal}
-                onUpdateDependencyStatus={handleUpdateDependencyStatus}
-                onAdvanceApprovalStage={handleAdvanceApprovalStage}
-                onAddMilestone={handleAddMilestone}
-                onDeleteMilestone={handleDeleteMilestone}
-              />
-            )}
+        {/* Tab 1: Gantt Chart (Multi-Projects cross-timeline) */}
+        {activeTab === 'gantt' && (
+          <MultiProjectGanttView
+            objectives={objectives}
+            currentObjectiveId={currentObjective?.id || ''}
+            onSelectObjective={setCurrentObjectiveId}
+            onOpenTaskModal={handleOpenTaskModal}
+            onOpenMilestoneModal={handleOpenMilestoneModal}
+          />
+        )}
 
-            {activeTab === 'radar' && (
-              <DependenciesRadar
-                objective={currentObjective}
-                onOpenFollowUpModal={handleOpenFollowUpModal}
-                onUpdateStatus={handleUpdateDependencyStatus}
-                onAdvanceApprovalStage={handleAdvanceApprovalStage}
-              />
-            )}
+        {/* Tab 2: TreeView */}
+        {activeTab === 'tree' && currentObjective && (
+          <TreeView
+            objective={currentObjective}
+            onOpenTaskModal={handleOpenTaskModal}
+            onDeleteTask={handleDeleteTask}
+            onToggleSubtask={handleToggleSubtask}
+            onReorderSubtasks={handleReorderSubtasks}
+            onMoveSubtask={handleMoveSubtask}
+            onOpenFollowUpModal={handleOpenFollowUpModal}
+            onUpdateDependencyStatus={handleUpdateDependencyStatus}
+            onAdvanceApprovalStage={handleAdvanceApprovalStage}
+            onAddMilestone={() => handleOpenMilestoneModal()}
+            onEditMilestone={handleOpenMilestoneModal}
+            onDeleteMilestone={handleDeleteMilestone}
+          />
+        )}
 
-            {activeTab === 'board' && (
-              <TaskBoardView
-                objective={currentObjective}
-                onOpenTaskModal={handleOpenTaskModal}
-                onOpenFollowUpModal={handleOpenFollowUpModal}
-              />
-            )}
+        {/* Tab 3: Dependencies Radar */}
+        {activeTab === 'radar' && currentObjective && (
+          <DependenciesRadar
+            objective={currentObjective}
+            onOpenFollowUpModal={handleOpenFollowUpModal}
+            onUpdateStatus={handleUpdateDependencyStatus}
+            onAdvanceApprovalStage={handleAdvanceApprovalStage}
+          />
+        )}
 
-            {activeTab === 'ocs' && (
-              <OcManager
-                objective={currentObjective}
-                onOpenFollowUpModal={handleOpenFollowUpModal}
-                onAdvanceApprovalStage={handleAdvanceApprovalStage}
-              />
-            )}
-          </>
-        ) : (
+        {/* Tab 4: Kanban Board */}
+        {activeTab === 'board' && currentObjective && (
+          <TaskBoardView
+            objective={currentObjective}
+            onOpenTaskModal={handleOpenTaskModal}
+            onOpenFollowUpModal={handleOpenFollowUpModal}
+          />
+        )}
+
+        {/* Tab 5: OCs & Financial Central */}
+        {activeTab === 'ocs' && currentObjective && (
+          <OcManager
+            objective={currentObjective}
+            onOpenFollowUpModal={handleOpenFollowUpModal}
+            onAdvanceApprovalStage={handleAdvanceApprovalStage}
+          />
+        )}
+
+        {!currentObjective && activeTab !== 'gantt' && (
           <div className="text-center py-20 bg-white rounded-2xl border border-slate-200">
             <h2 className="text-lg font-bold text-slate-800">Nenhum objetivo encontrado</h2>
             <button
@@ -548,6 +581,15 @@ export default function App() {
         />
       )}
 
+      {isMilestoneModalOpen && (
+        <MilestoneModal
+          isOpen={isMilestoneModalOpen}
+          onClose={() => setIsMilestoneModalOpen(false)}
+          onSave={handleSaveMilestone}
+          initialMilestone={editingMilestone}
+        />
+      )}
+
       <ObjectiveModal
         isOpen={isObjectiveModalOpen}
         onClose={() => setIsObjectiveModalOpen(false)}
@@ -571,7 +613,6 @@ export default function App() {
         objectiveTitle={currentObjective?.title}
         onSaveFollowUp={handleSaveFollowUp}
         onUpdateStatus={(depId, newStatus) => {
-          // Locate dependency in objective and update
           if (!currentObjective) return;
           currentObjective.milestones.forEach((m) => {
             m.tasks.forEach((t) => {

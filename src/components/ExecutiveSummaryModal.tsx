@@ -55,7 +55,7 @@ export const ExecutiveSummaryModal: React.FC<ExecutiveSummaryModalProps> = ({
   // Generate markdown executive briefing
   const markdownReport = `# RELATÓRIO EXECUTIVO OPERACIONAL
 **Objetivo:** ${objective.title}
-**Data do Evento:** ${objective.eventDate || 'A definir'}
+**Período:** ${objective.startDate ? `${objective.startDate} até ` : ''}${objective.eventDate || 'A definir'}
 **Status Geral:** ${stats.progressPercent}% Concluído (${stats.completedSubtasks}/${stats.totalSubtasks} subtarefas executadas)
 
 ---

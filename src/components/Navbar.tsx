@@ -4,6 +4,7 @@ import {
   ShieldAlert,
   Kanban,
   FileText,
+  CalendarRange,
   Plus,
   Sparkles,
   Download,
@@ -23,8 +24,8 @@ interface NavbarProps {
   currentObjectiveId: string;
   onSelectObjective: (id: string) => void;
   onOpenNewObjective: () => void;
-  activeTab: 'tree' | 'radar' | 'board' | 'ocs';
-  onSelectTab: (tab: 'tree' | 'radar' | 'board' | 'ocs') => void;
+  activeTab: 'tree' | 'radar' | 'board' | 'ocs' | 'gantt';
+  onSelectTab: (tab: 'tree' | 'radar' | 'board' | 'ocs' | 'gantt') => void;
   onOpenChecker: () => void;
   onOpenReport: () => void;
   onExportJson: () => void;
@@ -175,6 +176,22 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span>Árvore Hierárquica</span>
           </button>
 
+          {/* NEW: Gráfico de Gantt Multi-Projetos Button */}
+          <button
+            onClick={() => onSelectTab('gantt')}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all shrink-0 ${
+              activeTab === 'gantt'
+                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md ring-1 ring-blue-400/50'
+                : 'text-slate-300 hover:text-white hover:bg-slate-800 border border-slate-700/60'
+            }`}
+          >
+            <CalendarRange className="w-4 h-4 text-amber-400" />
+            <span>Gráfico de Gantt</span>
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-indigo-500/30 text-indigo-200 border border-indigo-400/30 font-bold">
+              Multi-Projetos
+            </span>
+          </button>
+
           <button
             onClick={() => onSelectTab('radar')}
             className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all shrink-0 ${
@@ -221,6 +238,16 @@ export const Navbar: React.FC<NavbarProps> = ({
         {isMenuOpen && (
           <div className="lg:hidden p-4 border-t border-slate-800 bg-slate-900 space-y-3">
             <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => {
+                  onSelectTab('gantt');
+                  setIsMenuOpen(false);
+                }}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold text-xs rounded-lg"
+              >
+                <CalendarRange className="w-4 h-4 text-amber-400" />
+                <span>Abrir Gráfico de Gantt (Multi-Projetos)</span>
+              </button>
               <button
                 onClick={() => {
                   onOpenChecker();

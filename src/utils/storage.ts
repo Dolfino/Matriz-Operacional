@@ -1,7 +1,7 @@
-import { Objective, Task, Dependency, Subtask } from '../types';
+import { Objective } from '../types';
 import { INITIAL_OBJECTIVES } from '../data/initialData';
 
-const STORAGE_KEY = 'matriz_operacional_data_v2';
+const STORAGE_KEY = 'matriz_operacional_data_v3';
 
 export function loadObjectives(): Objective[] {
   try {
@@ -29,6 +29,7 @@ export function saveObjectives(objectives: Objective[]): void {
 export function resetToDefault(): Objective[] {
   try {
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem('matriz_operacional_data_v2');
   } catch (e) {
     console.error('Failed to clear storage:', e);
   }
@@ -41,7 +42,7 @@ export function exportDataAsJson(objectives: Objective[]): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `matriz-operacional-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  a.download = `matriz-operacional-cronograma-backup-${new Date().toISOString().slice(0, 10)}.json`;
   a.click();
   URL.revokeObjectURL(url);
 }

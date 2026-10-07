@@ -15,6 +15,7 @@ import {
   ChevronDown,
   ArrowUpDown,
   ShieldCheck,
+  Calendar,
 } from 'lucide-react';
 import { Task, Subtask, Dependency, TaskCategory, ApprovalStage } from '../types';
 import { getApprovalRuleForCost, createDefaultApprovalStages } from '../utils/approvalRules';
@@ -42,12 +43,15 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState<TaskCategory>('Fornecedor & OC');
   const [priority, setPriority] = useState<'high' | 'medium' | 'low'>('high');
+  const [startDate, setStartDate] = useState('');
   const [deadline, setDeadline] = useState('');
 
   // Subtasks list
   const [subtasks, setSubtasks] = useState<Subtask[]>([]);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
   const [newSubtaskAssignee, setNewSubtaskAssignee] = useState('');
+  const [newSubtaskStartDate, setNewSubtaskStartDate] = useState('');
+  const [newSubtaskDueDate, setNewSubtaskDueDate] = useState('');
   const [newSubtaskOc, setNewSubtaskOc] = useState('');
   const [newSubtaskCost, setNewSubtaskCost] = useState('');
 
@@ -55,11 +59,12 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   const [dependencies, setDependencies] = useState<Dependency[]>([]);
   const [newDepTitle, setNewDepTitle] = useState('');
   const [newDepOwner, setNewDepOwner] = useState('');
+  const [newDepStartDate, setNewDepStartDate] = useState('');
   const [newDepSla, setNewDepSla] = useState('');
   const [newDepSeverity, setNewDepSeverity] = useState<Dependency['severity']>('critical');
   const [newDepLinkedSubtaskId, setNewDepLinkedSubtaskId] = useState<string>('');
 
-  // Reorder Subtasks in Modal (Creation and Editing)
+  // Reorder Subtasks in Modal
   const [draggedSubtaskIndex, setDraggedSubtaskIndex] = useState<number | null>(null);
   const [dragOverSubtaskIndex, setDragOverSubtaskIndex] = useState<number | null>(null);
 
@@ -69,7 +74,8 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       setDescription(initialTask.description || '');
       setCategory(initialTask.category);
       setPriority(initialTask.priority);
-      setDeadline(initialTask.deadline || '');
+      setStartDate(initialTask.startDate || '');
+      setDeadline(initialTask.deadline || initialTask.endDate || '');
       setSubtasks(initialTask.subtasks || []);
       setDependencies(initialTask.dependencies || []);
     } else {
@@ -77,10 +83,22 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       setDescription('');
       setCategory('Fornecedor & OC');
       setPriority('high');
+      setStartDate('');
       setDeadline('');
       setSubtasks([]);
       setDependencies([]);
     }
+    setNewSubtaskTitle('');
+    setNewSubtaskAssignee('');
+    setNewSubtaskStartDate('');
+    setNewSubtaskDueDate('');
+    setNewSubtaskOc('');
+    setNewSubtaskCost('');
+    setNewDepTitle('');
+    setNewDepOwner('');
+    setNewDepStartDate('');
+    setNewDepSla('');
+    setNewDepLinkedSubtaskId('');
   }, [initialTask, isOpen]);
 
   if (!isOpen) return null;
@@ -88,15 +106,14 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   const handleAddSubtask = () => {
     if (!newSubtaskTitle.trim()) return;
 
-    // Warning check if user writes an external approval as subtask
-    const lower = newSubtaskTitle.toLowerCase();
-    const isApprovalWord = lower.includes('aprovar') || lower.includes('aprovação') || lower.includes('charles');
-
     const newSub: Subtask = {
       id: `sub-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
       title: newSubtaskTitle.trim(),
       status: 'pending',
       assignee: newSubtaskAssignee.trim() || undefined,
+      startDate: newSubtaskStartDate || undefined,
+      dueDate: newSubtaskDueDate || undefined,
+      endDate: newSubtaskDueDate || undefined,
       ocNumber: newSubtaskOc.trim() || undefined,
       orderCost: newSubtaskCost ? parseFloat(newSubtaskCost) : undefined,
     };
@@ -104,6 +121,8 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     setSubtasks([...subtasks, newSub]);
     setNewSubtaskTitle('');
     setNewSubtaskAssignee('');
+    setNewSubtaskStartDate('');
+    setNewSubtaskDueDate('');
     setNewSubtaskOc('');
     setNewSubtaskCost('');
   };
@@ -116,7 +135,12 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     setSubtasks(
       subtasks.map((s) => {
         if (s.id !== id) return s;
-        const nextStatus: Subtask['status'] = s.status === 'completed' ? 'pending' : s.status === 'pending' ? 'in_progress' : 'completed';
+        const nextStatus: Subtask['status'] =
+          s.status === 'completed'
+            ? 'pending'
+            : s.status === 'pending'
+            ? 'in_progress'
+            : 'completed';
         return { ...s, status: nextStatus };
       })
     );
@@ -160,11 +184,6 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     setDragOverSubtaskIndex(null);
   };
 
-  const handleDragEnd = () => {
-    setDraggedSubtaskIndex(null);
-    setDragOverSubtaskIndex(null);
-  };
-
   const handleAddDependency = () => {
     if (!newDepTitle.trim() || !newDepOwner.trim()) return;
 
@@ -174,6 +193,9 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       departmentOrOwner: newDepOwner.trim(),
       status: 'waiting_approval',
       severity: newDepSeverity,
+      startDate: newDepStartDate || undefined,
+      requestDate: newDepStartDate || undefined,
+      endDate: newDepSla || undefined,
       slaDeadline: newDepSla || undefined,
       linkedSubtaskId: newDepLinkedSubtaskId || undefined,
       followUps: [],
@@ -182,6 +204,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     setDependencies([...dependencies, newDep]);
     setNewDepTitle('');
     setNewDepOwner('');
+    setNewDepStartDate('');
     setNewDepSla('');
     setNewDepLinkedSubtaskId('');
   };
@@ -196,6 +219,9 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       departmentOrOwner: rule.maxTier,
       status: 'waiting_approval',
       severity: cost > 2000 ? 'critical' : 'normal',
+      startDate: startDate || new Date().toISOString().slice(0, 10),
+      requestDate: startDate || new Date().toISOString().slice(0, 10),
+      endDate: deadline || undefined,
       slaDeadline: deadline || undefined,
       notes: `Valor: ${formatCurrencyBRL(cost)}. Exige esteira de alçadas: ${rule.description}`,
       followUps: [],
@@ -218,7 +244,9 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       description: description.trim() || undefined,
       category,
       priority,
+      startDate: startDate || undefined,
       deadline: deadline || undefined,
+      endDate: deadline || undefined,
       subtasks,
       dependencies,
     };
@@ -283,32 +311,50 @@ export const TaskModal: React.FC<TaskModalProps> = ({
               </select>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Prioridade
-                </label>
-                <select
-                  value={priority}
-                  onChange={(e) => setPriority(e.target.value as any)}
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-slate-800 text-sm bg-white"
-                >
-                  <option value="high">Alta / Crítica</option>
-                  <option value="medium">Média</option>
-                  <option value="low">Baixa</option>
-                </select>
-              </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                Prioridade
+              </label>
+              <select
+                value={priority}
+                onChange={(e) => setPriority(e.target.value as any)}
+                className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-slate-800 text-sm bg-white"
+              >
+                <option value="high">Alta / Crítica</option>
+                <option value="medium">Média</option>
+                <option value="low">Baixa</option>
+              </select>
+            </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Prazo / Data
-                </label>
-                <input
-                  type="date"
-                  value={deadline}
-                  onChange={(e) => setDeadline(e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-slate-800 text-sm bg-white"
-                />
+            {/* Período por Data da Tarefa */}
+            <div className="md:col-span-2 p-3 rounded-xl bg-indigo-50/60 border border-indigo-100">
+              <span className="block text-xs font-bold text-indigo-950 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                <Calendar className="w-4 h-4 text-indigo-600" />
+                Período da Tarefa (Cronograma & Gantt)
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                    Data de Início
+                  </label>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-800 text-xs bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                    Data de Fim / Prazo Final
+                  </label>
+                  <input
+                    type="date"
+                    value={deadline}
+                    onChange={(e) => setDeadline(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-800 text-xs bg-white"
+                  />
+                </div>
               </div>
             </div>
 
@@ -363,64 +409,72 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                     draggable
                     onDragStart={(e) => handleDragStart(e, idx)}
                     onDragOver={(e) => handleDragOver(e, idx)}
-                    onDragEnd={handleDragEnd}
                     onDrop={(e) => handleDrop(e, idx)}
-                    className={`group flex items-center justify-between gap-2 p-2 sm:p-2.5 rounded-xl border text-xs transition-all ${
+                    className={`flex items-center justify-between gap-2 p-2.5 bg-white rounded-xl border transition-all ${
                       isBeingDragged
-                        ? 'opacity-40 border-indigo-400 bg-indigo-50/60 scale-[0.99]'
+                        ? 'opacity-40 border-indigo-400 bg-indigo-50/50 scale-[0.99]'
                         : isTargeted
-                        ? 'border-indigo-500 ring-2 ring-indigo-300 bg-indigo-50/40'
-                        : 'bg-white border-slate-200 hover:border-slate-300 shadow-2xs'
+                        ? 'border-indigo-600 border-2 bg-indigo-50/70 shadow-md'
+                        : 'border-slate-200 hover:border-slate-300'
                     }`}
                   >
                     <div className="flex items-center gap-2 flex-1 min-w-0">
-                      {/* Drag handle */}
                       <div
-                        className="text-slate-400 hover:text-indigo-600 cursor-grab active:cursor-grabbing p-1 rounded hover:bg-slate-100 transition-colors shrink-0"
-                        title="Arraste para reposicionar esta subtarefa"
+                        className="cursor-grab active:cursor-grabbing text-slate-400 hover:text-indigo-600 p-0.5 rounded transition-colors"
+                        title="Arrastar para reordenar"
                       >
                         <GripVertical className="w-4 h-4" />
                       </div>
 
-                      {/* Sequence number */}
-                      <span className="text-[11px] font-bold text-slate-400 w-5 text-left shrink-0">
-                        {idx + 1}.
-                      </span>
-
-                      {/* Status checkbox */}
                       <button
                         type="button"
                         onClick={() => handleToggleSubtaskStatus(sub.id)}
-                        className={`w-5 h-5 rounded flex items-center justify-center shrink-0 border transition-colors ${
+                        className={`w-4 h-4 rounded flex items-center justify-center transition-colors shrink-0 ${
                           sub.status === 'completed'
-                            ? 'bg-emerald-600 border-emerald-600 text-white'
+                            ? 'bg-emerald-600 text-white'
                             : sub.status === 'in_progress'
-                            ? 'bg-blue-100 border-blue-400 text-blue-700 font-bold'
-                            : 'border-slate-300 hover:border-slate-400'
+                            ? 'bg-amber-500 text-white'
+                            : 'border border-slate-300 hover:border-slate-400'
                         }`}
-                        title="Alternar estado"
+                        title="Alternar status: Pendente ➔ Em Andamento ➔ Concluído"
                       >
                         {sub.status === 'completed' && <CheckCircle2 className="w-3.5 h-3.5" />}
-                        {sub.status === 'in_progress' && '•'}
+                        {sub.status === 'in_progress' && <Clock className="w-3 h-3" />}
                       </button>
 
-                      {/* Title & metadata */}
-                      <div className="flex items-center gap-1.5 flex-1 min-w-0 flex-wrap">
+                      <div className="flex items-center gap-2 flex-wrap min-w-0 flex-1">
                         <span
-                          className={`font-medium truncate ${
-                            sub.status === 'completed' ? 'line-through text-slate-400' : 'text-slate-800'
+                          className={`text-xs font-medium truncate ${
+                            sub.status === 'completed'
+                              ? 'line-through text-slate-400'
+                              : 'text-slate-800'
                           }`}
                         >
-                          {sub.title}
+                          {idx + 1}. {sub.title}
                         </span>
+
+                        {/* Date period badge for subtask */}
+                        {(sub.startDate || sub.dueDate) && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                            <Calendar className="w-3 h-3 text-indigo-500" />
+                            {sub.startDate ? sub.startDate : 'Início'} ➔ {sub.dueDate || sub.endDate || 'Prazo'}
+                          </span>
+                        )}
+
+                        {sub.assignee && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                            <User className="w-3 h-3 text-slate-400" />
+                            {sub.assignee}
+                          </span>
+                        )}
                         {sub.ocNumber && (
-                          <span className="px-1.5 py-0.2 rounded bg-purple-50 text-purple-700 font-mono text-[10px] shrink-0 border border-purple-200 font-semibold">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-mono font-semibold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">
                             {sub.ocNumber}
                           </span>
                         )}
                         {sub.orderCost && (
                           <span className="text-[11px] text-emerald-700 font-semibold shrink-0">
-                            R$ {sub.orderCost.toLocaleString('pt-BR')}
+                            {formatCurrencyBRL(sub.orderCost)}
                           </span>
                         )}
 
@@ -508,29 +562,53 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 </button>
               </div>
 
-              {/* Optional fields for subtask */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-                <input
-                  type="text"
-                  value={newSubtaskAssignee}
-                  onChange={(e) => setNewSubtaskAssignee(e.target.value)}
-                  placeholder="Responsável interno (opcional)"
-                  className="px-2.5 py-1 text-[11px] rounded border border-slate-200 bg-white text-slate-700"
-                />
-                <input
-                  type="text"
-                  value={newSubtaskOc}
-                  onChange={(e) => setNewSubtaskOc(e.target.value)}
-                  placeholder="Nº da OC (se houver)"
-                  className="px-2.5 py-1 text-[11px] rounded border border-slate-200 bg-white text-slate-700 font-mono"
-                />
-                <input
-                  type="number"
-                  value={newSubtaskCost}
-                  onChange={(e) => setNewSubtaskCost(e.target.value)}
-                  placeholder="Valor R$ (se houver)"
-                  className="px-2.5 py-1 text-[11px] rounded border border-slate-200 bg-white text-slate-700"
-                />
+              {/* Fields for subtask: Dates, Assignee, OC, Cost */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                <div>
+                  <input
+                    type="date"
+                    value={newSubtaskStartDate}
+                    onChange={(e) => setNewSubtaskStartDate(e.target.value)}
+                    placeholder="Data Início"
+                    className="w-full px-2.5 py-1 text-[11px] rounded border border-slate-200 bg-white text-slate-700"
+                    title="Data de Início da Subtarefa"
+                  />
+                </div>
+                <div>
+                  <input
+                    type="date"
+                    value={newSubtaskDueDate}
+                    onChange={(e) => setNewSubtaskDueDate(e.target.value)}
+                    placeholder="Data Fim / Prazo"
+                    className="w-full px-2.5 py-1 text-[11px] rounded border border-slate-200 bg-white text-slate-700"
+                    title="Data Fim / Prazo da Subtarefa"
+                  />
+                </div>
+                <div>
+                  <input
+                    type="text"
+                    value={newSubtaskAssignee}
+                    onChange={(e) => setNewSubtaskAssignee(e.target.value)}
+                    placeholder="Responsável (opcional)"
+                    className="w-full px-2.5 py-1 text-[11px] rounded border border-slate-200 bg-white text-slate-700"
+                  />
+                </div>
+                <div className="flex gap-1.5">
+                  <input
+                    type="text"
+                    value={newSubtaskOc}
+                    onChange={(e) => setNewSubtaskOc(e.target.value)}
+                    placeholder="Nº OC"
+                    className="w-1/2 px-2 py-1 text-[11px] rounded border border-slate-200 bg-white text-slate-700 font-mono"
+                  />
+                  <input
+                    type="number"
+                    value={newSubtaskCost}
+                    onChange={(e) => setNewSubtaskCost(e.target.value)}
+                    placeholder="R$ Valor"
+                    className="w-1/2 px-2 py-1 text-[11px] rounded border border-slate-200 bg-white text-slate-700"
+                  />
+                </div>
               </div>
 
               {/* Smart Alçada Suggestion when cost is typed */}
@@ -594,10 +672,16 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                           {dep.departmentOrOwner}
                         </span>
                       </div>
-                      {dep.slaDeadline && (
-                        <span className="text-[11px] text-slate-500">
-                          Data limite: <strong className="text-slate-700">{dep.slaDeadline}</strong>
-                        </span>
+                      {(dep.startDate || dep.requestDate || dep.slaDeadline || dep.endDate) && (
+                        <div className="text-[11px] text-slate-500 flex items-center gap-2 mt-0.5">
+                          <span>
+                            Aberto: <strong>{dep.startDate || dep.requestDate || 'Sem data'}</strong>
+                          </span>
+                          <span>➔</span>
+                          <span>
+                            Prazo SLA: <strong className="text-slate-800">{dep.endDate || dep.slaDeadline || 'Sem prazo'}</strong>
+                          </span>
+                        </div>
                       )}
                     </div>
                     <button
@@ -639,14 +723,22 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                   value={newDepTitle}
                   onChange={(e) => setNewDepTitle(e.target.value)}
                   placeholder="Ex: Fornecedor enviar proposta, Aprovação de OC..."
-                  className="sm:col-span-5 px-3 py-1.5 rounded-lg border border-slate-300 text-slate-800 bg-white"
+                  className="sm:col-span-4 px-3 py-1.5 rounded-lg border border-slate-300 text-slate-800 bg-white"
                 />
                 <input
                   type="text"
                   value={newDepOwner}
                   onChange={(e) => setNewDepOwner(e.target.value)}
-                  placeholder="Responsável (ex: Fornecedor Eleito / CEOP)"
-                  className="sm:col-span-4 px-3 py-1.5 rounded-lg border border-slate-300 text-slate-800 bg-white"
+                  placeholder="Responsável (ex: CEOP / Diretoria)"
+                  className="sm:col-span-3 px-3 py-1.5 rounded-lg border border-slate-300 text-slate-800 bg-white"
+                />
+                <input
+                  type="date"
+                  value={newDepStartDate}
+                  onChange={(e) => setNewDepStartDate(e.target.value)}
+                  placeholder="Data Início"
+                  className="sm:col-span-2 px-2 py-1.5 rounded-lg border border-slate-300 text-slate-800 bg-white"
+                  title="Data de Solicitação / Início da Dependência"
                 />
                 <input
                   type="date"
@@ -654,6 +746,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                   onChange={(e) => setNewDepSla(e.target.value)}
                   placeholder="Prazo SLA"
                   className="sm:col-span-2 px-2 py-1.5 rounded-lg border border-slate-300 text-slate-800 bg-white"
+                  title="Prazo Limite SLA"
                 />
                 <button
                   type="button"

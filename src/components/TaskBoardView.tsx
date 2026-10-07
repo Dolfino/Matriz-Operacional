@@ -132,6 +132,16 @@ export const TaskBoardView: React.FC<TaskBoardViewProps> = ({
                         {task.title}
                       </h4>
 
+                      {(task.startDate || task.deadline) && (
+                        <div className="flex items-center gap-1 text-[10px] text-slate-500 font-medium">
+                          <Clock className="w-3 h-3 text-slate-400" />
+                          <span>
+                            {task.startDate ? `${task.startDate} ➔ ` : ''}
+                            {task.deadline || task.endDate}
+                          </span>
+                        </div>
+                      )}
+
                       {/* Subtasks progress */}
                       <div className="space-y-1">
                         <div className="flex items-center justify-between text-[11px] text-slate-500">
