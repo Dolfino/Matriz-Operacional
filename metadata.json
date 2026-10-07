@@ -1,0 +1,6 @@
+{
+  "name": "Matriz Operacional - Gestão por Objetivos e Bloqueios",
+  "description": "Sistema de gestão hierárquica operacional para eventos, fornecedores, ordens de compra e acompanhamento ativo de dependências e bloqueios.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
