@@ -22,6 +22,7 @@ import { DependenciesRadar } from './components/DependenciesRadar';
 import { TaskBoardView } from './components/TaskBoardView';
 import { OcManager } from './components/OcManager';
 import { MultiProjectGanttView } from './components/MultiProjectGanttView';
+import { OperationalScheduleView } from './components/OperationalScheduleView';
 import { TaskModal } from './components/TaskModal';
 import { MilestoneModal } from './components/MilestoneModal';
 import { ObjectiveModal } from './components/ObjectiveModal';
@@ -35,7 +36,7 @@ export default function App() {
   const [currentObjectiveId, setCurrentObjectiveId] = useState<string>(
     () => objectives[0]?.id || ''
   );
-  const [activeTab, setActiveTab] = useState<'tree' | 'radar' | 'board' | 'ocs' | 'gantt'>('tree');
+  const [activeTab, setActiveTab] = useState<'tree' | 'radar' | 'board' | 'ocs' | 'gantt' | 'schedule'>('tree');
 
   // Modals state
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
@@ -439,7 +440,16 @@ export default function App() {
     setIsFollowUpModalOpen(true);
   };
 
-  const handleSaveFollowUp = (dependencyId: string, note: string, author?: string) => {
+  const handleSaveFollowUp = (
+    dependencyId: string,
+    note: string,
+    author?: string,
+    additionalData?: {
+      nextFollowUpDate?: string;
+      followUpRecurrence?: 'daily' | 'every_2_days' | 'weekly' | 'none';
+      reminderNotes?: string;
+    }
+  ) => {
     if (!currentObjective) return;
 
     const timestamp =
@@ -475,6 +485,15 @@ export default function App() {
             ...d,
             followUps: [...(d.followUps || []), newLog],
             history: [...(d.history || []), historyEntry],
+            ...(additionalData?.nextFollowUpDate !== undefined && {
+              nextFollowUpDate: additionalData.nextFollowUpDate,
+            }),
+            ...(additionalData?.followUpRecurrence !== undefined && {
+              followUpRecurrence: additionalData.followUpRecurrence,
+            }),
+            ...(additionalData?.reminderNotes !== undefined && {
+              reminderNotes: additionalData.reminderNotes,
+            }),
           };
         }),
       })),
@@ -722,6 +741,17 @@ export default function App() {
             onOpenFollowUpModal={handleOpenFollowUpModal}
             onAdvanceApprovalStage={handleAdvanceApprovalStage}
             onUpdateSubtaskFinancialStatus={handleUpdateSubtaskFinancialStatus}
+          />
+        )}
+
+        {/* Tab 6: Agenda & Cobranças Operacionais (Etapa 4) */}
+        {activeTab === 'schedule' && currentObjective && (
+          <OperationalScheduleView
+            objective={currentObjective}
+            onOpenFollowUpModal={(milestoneId, taskId, dep) => {
+              handleOpenFollowUpModal(dep, 'Cobrança');
+            }}
+            onSelectTab={setActiveTab}
           />
         )}
 

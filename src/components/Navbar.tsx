@@ -15,17 +15,20 @@ import {
   Calendar,
   AlertTriangle,
   ChevronDown,
+  Clock,
+  BellRing,
 } from 'lucide-react';
 import { Objective } from '../types';
 import { getObjectiveStats } from '../utils/helpers';
+import { buildOperationalSchedule } from '../utils/scheduleProjection';
 
 interface NavbarProps {
   objectives: Objective[];
   currentObjectiveId: string;
   onSelectObjective: (id: string) => void;
   onOpenNewObjective: () => void;
-  activeTab: 'tree' | 'radar' | 'board' | 'ocs' | 'gantt';
-  onSelectTab: (tab: 'tree' | 'radar' | 'board' | 'ocs' | 'gantt') => void;
+  activeTab: 'tree' | 'radar' | 'board' | 'ocs' | 'gantt' | 'schedule';
+  onSelectTab: (tab: 'tree' | 'radar' | 'board' | 'ocs' | 'gantt' | 'schedule') => void;
   onOpenChecker: () => void;
   onOpenReport: () => void;
   onExportJson: () => void;
@@ -47,6 +50,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const currentObjective = objectives.find((o) => o.id === currentObjectiveId) || objectives[0];
   const stats = currentObjective ? getObjectiveStats(currentObjective) : null;
+  const schedule = currentObjective ? buildOperationalSchedule(currentObjective, '2026-10-08') : null;
+  const urgentActionsCount = schedule ? schedule.summary.overdueCount + schedule.summary.todayCount : 0;
 
   return (
     <header className="sticky top-0 z-40 bg-slate-900 border-b border-slate-800 text-white shadow-md">
@@ -192,6 +197,28 @@ export const Navbar: React.FC<NavbarProps> = ({
             </span>
           </button>
 
+          {/* NEW: Agenda & Cobranças (Etapa 4) */}
+          <button
+            onClick={() => onSelectTab('schedule')}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all shrink-0 ${
+              activeTab === 'schedule'
+                ? 'bg-amber-500 text-slate-950 font-black shadow-md'
+                : 'text-slate-300 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            <Clock className="w-4 h-4 text-amber-400" />
+            <span>Agenda & Cobranças</span>
+            {urgentActionsCount > 0 ? (
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-rose-500 text-white font-black animate-pulse">
+                {urgentActionsCount} hoje
+              </span>
+            ) : schedule && schedule.summary.totalPendingActions > 0 ? (
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-700 text-slate-300 font-bold">
+                {schedule.summary.totalPendingActions}
+              </span>
+            ) : null}
+          </button>
+
           <button
             onClick={() => onSelectTab('radar')}
             className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all shrink-0 ${
@@ -238,6 +265,16 @@ export const Navbar: React.FC<NavbarProps> = ({
         {isMenuOpen && (
           <div className="lg:hidden p-4 border-t border-slate-800 bg-slate-900 space-y-3">
             <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => {
+                  onSelectTab('schedule');
+                  setIsMenuOpen(false);
+                }}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-amber-500 text-slate-950 font-black text-xs rounded-lg"
+              >
+                <Clock className="w-4 h-4 text-slate-950" />
+                <span>Agenda & Cobranças ({urgentActionsCount > 0 ? `${urgentActionsCount} hoje` : 'Ativa'})</span>
+              </button>
               <button
                 onClick={() => {
                   onSelectTab('gantt');

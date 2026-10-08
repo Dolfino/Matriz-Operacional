@@ -1,3 +1,12 @@
+/**
+ * Core Operacional v1.0.0
+ * Schema: schema-v1.0
+ * Contrato Invariante: 4 Níveis (Objetivo → Marco → Tarefa → Subtarefa) + Dependências Transversais
+ */
+
+export const CORE_OPERATIONAL_VERSION = 'v1.0.0';
+export const CORE_SCHEMA_VERSION = 'schema-v1.0';
+
 export type DependencyLifecycleState = 'AGUARDANDO' | 'ATENDIDA' | 'EM_RISCO';
 
 // Status mantido para retrocompatibilidade
@@ -32,6 +41,8 @@ export interface DependencyHistoryEntry {
   author?: string;
 }
 
+export type FollowUpRecurrence = 'daily' | 'every_2_days' | 'weekly' | 'none';
+
 export interface Dependency {
   id: string;
   title: string; // Ex: "Aprovação da OC pela Superintendência"
@@ -51,6 +62,12 @@ export interface Dependency {
   resolvedAt?: string; // Data em que foi efetivamente atendida
   impactNextAction?: string; // Impacto operacional / Próxima ação que ela libera
   notes?: string;
+
+  // Etapa 4: Planejamento Temporal, Agenda e Follow-up Operacional
+  nextFollowUpDate?: string; // Data planejada do próximo follow-up / cobrança (YYYY-MM-DD)
+  followUpRecurrence?: FollowUpRecurrence; // Recorrência / cadência de cobrança
+  responsibleOwner?: string; // Responsável interno por cobrar ou dar andamento
+  reminderNotes?: string; // Observação ou estratégia da próxima cobrança
 
   followUps: FollowUpLog[]; // Histórico de cobranças / follow-ups
   history?: DependencyHistoryEntry[]; // Histórico de mudanças de estado operacional

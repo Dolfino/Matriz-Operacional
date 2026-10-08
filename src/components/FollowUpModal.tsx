@@ -10,7 +10,16 @@ interface FollowUpModalProps {
   dependency: Dependency | null;
   taskTitle?: string;
   objectiveTitle?: string;
-  onSaveFollowUp: (dependencyId: string, note: string, author?: string) => void;
+  onSaveFollowUp: (
+    dependencyId: string,
+    note: string,
+    author?: string,
+    additionalData?: {
+      nextFollowUpDate?: string;
+      followUpRecurrence?: 'daily' | 'every_2_days' | 'weekly' | 'none';
+      reminderNotes?: string;
+    }
+  ) => void;
   onUpdateStatus?: (dependencyId: string, newStatus: Dependency['status']) => void;
 }
 
@@ -25,6 +34,13 @@ export const FollowUpModal: React.FC<FollowUpModalProps> = ({
 }) => {
   const [note, setNote] = useState('');
   const [author, setAuthor] = useState('Operações');
+  const [nextFollowUpDate, setNextFollowUpDate] = useState(
+    dependency?.nextFollowUpDate || '2026-10-09'
+  );
+  const [followUpRecurrence, setFollowUpRecurrence] = useState<'daily' | 'every_2_days' | 'weekly' | 'none'>(
+    dependency?.followUpRecurrence || 'daily'
+  );
+  const [reminderNotes, setReminderNotes] = useState(dependency?.reminderNotes || '');
   const [copied, setCopied] = useState(false);
 
   if (!isOpen || !dependency) return null;
@@ -57,7 +73,11 @@ Equipe de Gestão e Operações`;
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!note.trim()) return;
-    onSaveFollowUp(dependency.id, note.trim(), author.trim());
+    onSaveFollowUp(dependency.id, note.trim(), author.trim(), {
+      nextFollowUpDate: nextFollowUpDate || undefined,
+      followUpRecurrence,
+      reminderNotes: reminderNotes.trim() || undefined,
+    });
     setNote('');
     onClose();
   };
@@ -199,6 +219,51 @@ Equipe de Gestão e Operações`;
                 placeholder="Ex: Cobrado pessoalmente na sala da Superintendência. Aguardando assinatura até amanhã às 12h."
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-amber-50/60 rounded-xl border border-amber-200/80">
+              <div>
+                <label className="block text-xs font-bold text-amber-900 mb-1">
+                  📅 Próxima Cobrança / Follow-up:
+                </label>
+                <input
+                  type="date"
+                  value={nextFollowUpDate}
+                  onChange={(e) => setNextFollowUpDate(e.target.value)}
+                  className="w-full px-3 py-1.5 text-xs rounded-lg border border-amber-300 bg-white text-slate-800 font-semibold"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-amber-900 mb-1">
+                  🔄 Recorrência da Cobrança:
+                </label>
+                <select
+                  value={followUpRecurrence}
+                  onChange={(e) =>
+                    setFollowUpRecurrence(e.target.value as 'daily' | 'every_2_days' | 'weekly' | 'none')
+                  }
+                  className="w-full px-3 py-1.5 text-xs rounded-lg border border-amber-300 bg-white text-slate-800 font-semibold"
+                >
+                  <option value="daily">Diária (Cobrança Ativa)</option>
+                  <option value="every_2_days">A cada 2 dias</option>
+                  <option value="weekly">Semanal</option>
+                  <option value="none">Sem recorrência (Data Única)</option>
+                </select>
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-bold text-amber-900 mb-1">
+                  💡 Estratégia / Lembrete da Próxima Ação:
+                </label>
+                <input
+                  type="text"
+                  value={reminderNotes}
+                  onChange={(e) => setReminderNotes(e.target.value)}
+                  placeholder="Ex: Escalar para a Diretoria caso a Superintendência não assine até às 14h."
+                  className="w-full px-3 py-1.5 text-xs rounded-lg border border-amber-300 bg-white text-slate-800"
+                />
+              </div>
             </div>
 
             <div>
