@@ -16,10 +16,21 @@ import {
   ArrowUpDown,
   ShieldCheck,
   Calendar,
+  Lock,
+  Unlock,
+  Link as LinkIcon,
 } from 'lucide-react';
-import { Task, Subtask, Dependency, TaskCategory, ApprovalStage } from '../types';
+import {
+  Task,
+  Subtask,
+  Dependency,
+  TaskCategory,
+  ApprovalStage,
+  FinancialStatus,
+  DependencyLifecycleState,
+} from '../types';
 import { getApprovalRuleForCost, createDefaultApprovalStages } from '../utils/approvalRules';
-import { formatCurrencyBRL } from '../utils/helpers';
+import { formatCurrencyBRL, getDependencyLifecycle } from '../utils/helpers';
 import { ApprovalChainBadge } from './ApprovalChainBadge';
 
 interface TaskModalProps {
@@ -54,6 +65,8 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   const [newSubtaskDueDate, setNewSubtaskDueDate] = useState('');
   const [newSubtaskOc, setNewSubtaskOc] = useState('');
   const [newSubtaskCost, setNewSubtaskCost] = useState('');
+  const [newSubtaskFinancialStatus, setNewSubtaskFinancialStatus] =
+    useState<FinancialStatus>('PREVISTO');
 
   // Dependencies list
   const [dependencies, setDependencies] = useState<Dependency[]>([]);
@@ -63,6 +76,9 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   const [newDepSla, setNewDepSla] = useState('');
   const [newDepSeverity, setNewDepSeverity] = useState<Dependency['severity']>('critical');
   const [newDepLinkedSubtaskId, setNewDepLinkedSubtaskId] = useState<string>('');
+  const [newDepImpact, setNewDepImpact] = useState('');
+  const [newDepState, setNewDepState] = useState<DependencyLifecycleState>('AGUARDANDO');
+  const [newDepIsBlocking, setNewDepIsBlocking] = useState<boolean>(true);
 
   // Reorder Subtasks in Modal
   const [draggedSubtaskIndex, setDraggedSubtaskIndex] = useState<number | null>(null);
@@ -94,11 +110,15 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     setNewSubtaskDueDate('');
     setNewSubtaskOc('');
     setNewSubtaskCost('');
+    setNewSubtaskFinancialStatus('PREVISTO');
     setNewDepTitle('');
     setNewDepOwner('');
     setNewDepStartDate('');
     setNewDepSla('');
     setNewDepLinkedSubtaskId('');
+    setNewDepImpact('');
+    setNewDepState('AGUARDANDO');
+    setNewDepIsBlocking(true);
   }, [initialTask, isOpen]);
 
   if (!isOpen) return null;
@@ -116,6 +136,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       endDate: newSubtaskDueDate || undefined,
       ocNumber: newSubtaskOc.trim() || undefined,
       orderCost: newSubtaskCost ? parseFloat(newSubtaskCost) : undefined,
+      financialStatus: newSubtaskCost || newSubtaskOc ? newSubtaskFinancialStatus : undefined,
     };
 
     setSubtasks([...subtasks, newSub]);
@@ -125,6 +146,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     setNewSubtaskDueDate('');
     setNewSubtaskOc('');
     setNewSubtaskCost('');
+    setNewSubtaskFinancialStatus('PREVISTO');
   };
 
   const handleRemoveSubtask = (id: string) => {
@@ -187,18 +209,36 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   const handleAddDependency = () => {
     if (!newDepTitle.trim() || !newDepOwner.trim()) return;
 
+    const isAttended = newDepState === 'ATENDIDA';
+
     const newDep: Dependency = {
       id: `dep-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
       title: newDepTitle.trim(),
       departmentOrOwner: newDepOwner.trim(),
-      status: 'waiting_approval',
-      severity: newDepSeverity,
+      status: isAttended ? 'cleared' : newDepState === 'EM_RISCO' ? 'blocked' : 'waiting_approval',
+      state: newDepState,
+      bloqueandoFluxo: isAttended ? false : newDepIsBlocking,
+      openedAt: newDepStartDate || new Date().toISOString().slice(0, 10),
       startDate: newDepStartDate || undefined,
       requestDate: newDepStartDate || undefined,
-      endDate: newDepSla || undefined,
       slaDeadline: newDepSla || undefined,
+      endDate: newDepSla || undefined,
+      resolvedAt: isAttended ? new Date().toISOString().slice(0, 10) : undefined,
+      impactNextAction: newDepImpact.trim() || undefined,
       linkedSubtaskId: newDepLinkedSubtaskId || undefined,
+      severity: newDepSeverity,
       followUps: [],
+      history: [
+        {
+          id: `h-${Date.now()}`,
+          timestamp: new Date().toISOString().slice(0, 16).replace('T', ' '),
+          newState: newDepState,
+          wasBlocking: false,
+          isBlocking: isAttended ? false : newDepIsBlocking,
+          note: 'Dependência cadastrada na tarefa.',
+          author: 'Operações',
+        },
+      ],
     };
 
     setDependencies([...dependencies, newDep]);
@@ -207,31 +247,60 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     setNewDepStartDate('');
     setNewDepSla('');
     setNewDepLinkedSubtaskId('');
+    setNewDepImpact('');
+    setNewDepState('AGUARDANDO');
+    setNewDepIsBlocking(true);
   };
 
   const handleAutoAddApprovalDependency = (cost: number, ocNumber?: string) => {
     const rule = getApprovalRuleForCost(cost);
     const stages = createDefaultApprovalStages(cost);
     const ocLabel = ocNumber ? ` da ${ocNumber}` : '';
+    const nowStr = new Date().toISOString().slice(0, 10);
     const newDep: Dependency = {
       id: `dep-oc-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
       title: `Aprovação de OC${ocLabel} (${rule.requiredLevels.join(' → ')})`,
       departmentOrOwner: rule.maxTier,
       status: 'waiting_approval',
-      severity: cost > 2000 ? 'critical' : 'normal',
-      startDate: startDate || new Date().toISOString().slice(0, 10),
-      requestDate: startDate || new Date().toISOString().slice(0, 10),
-      endDate: deadline || undefined,
+      state: 'AGUARDANDO',
+      bloqueandoFluxo: true,
+      openedAt: startDate || nowStr,
+      startDate: startDate || nowStr,
+      requestDate: startDate || nowStr,
       slaDeadline: deadline || undefined,
+      endDate: deadline || undefined,
+      severity: cost > 2000 ? 'critical' : 'normal',
+      impactNextAction: 'Libera formalização do contrato e emissão de empenho',
       notes: `Valor: ${formatCurrencyBRL(cost)}. Exige esteira de alçadas: ${rule.description}`,
       followUps: [],
       approvalStages: stages,
+      history: [
+        {
+          id: `h-${Date.now()}`,
+          timestamp: new Date().toISOString().slice(0, 16).replace('T', ' '),
+          newState: 'AGUARDANDO',
+          wasBlocking: false,
+          isBlocking: true,
+          note: 'Alçada de aprovação gerada automaticamente pelo valor da OC.',
+          author: 'Compras',
+        },
+      ],
     };
     setDependencies([...dependencies, newDep]);
   };
 
   const handleRemoveDependency = (id: string) => {
     setDependencies(dependencies.filter((d) => d.id !== id));
+  };
+
+  const handleToggleDepBlocking = (id: string) => {
+    setDependencies(
+      dependencies.map((d) => {
+        if (d.id !== id) return d;
+        const currentBlocking = typeof d.bloqueandoFluxo === 'boolean' ? d.bloqueandoFluxo : true;
+        return { ...d, bloqueandoFluxo: !currentBlocking };
+      })
+    );
   };
 
   const handleSave = (e: React.FormEvent) => {
@@ -301,7 +370,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value as TaskCategory)}
-                className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-slate-800 text-sm bg-white"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-slate-900 text-sm focus:ring-2 focus:ring-indigo-500"
               >
                 <option value="Fornecedor & OC">Fornecedor & OC</option>
                 <option value="Infraestrutura & Montagem">Infraestrutura & Montagem</option>
@@ -317,57 +386,49 @@ export const TaskModal: React.FC<TaskModalProps> = ({
               </label>
               <select
                 value={priority}
-                onChange={(e) => setPriority(e.target.value as any)}
-                className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-slate-800 text-sm bg-white"
+                onChange={(e) => setPriority(e.target.value as 'high' | 'medium' | 'low')}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-slate-900 text-sm focus:ring-2 focus:ring-indigo-500"
               >
-                <option value="high">Alta / Crítica</option>
-                <option value="medium">Média</option>
-                <option value="low">Baixa</option>
+                <option value="high">Alta Prioridade</option>
+                <option value="medium">Média Prioridade</option>
+                <option value="low">Baixa Prioridade</option>
               </select>
             </div>
 
-            {/* Período por Data da Tarefa */}
-            <div className="md:col-span-2 p-3 rounded-xl bg-indigo-50/60 border border-indigo-100">
-              <span className="block text-xs font-bold text-indigo-950 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                <Calendar className="w-4 h-4 text-indigo-600" />
-                Período da Tarefa (Cronograma & Gantt)
-              </span>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                    Data de Início
-                  </label>
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-800 text-xs bg-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                    Data de Fim / Prazo Final
-                  </label>
-                  <input
-                    type="date"
-                    value={deadline}
-                    onChange={(e) => setDeadline(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-800 text-xs bg-white"
-                  />
-                </div>
-              </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                Data Início da Tarefa
+              </label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-slate-900 text-sm focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                Prazo Final (Término)
+              </label>
+              <input
+                type="date"
+                value={deadline}
+                onChange={(e) => setDeadline(e.target.value)}
+                className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-slate-900 text-sm focus:ring-2 focus:ring-indigo-500"
+              />
             </div>
 
             <div className="md:col-span-2">
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Descrição ou Especificação Técnica
+                Descrição Operacional
               </label>
               <textarea
+                rows={2}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                rows={2}
-                placeholder="Detalhes técnicos, contato do fornecedor ou orientações de montagem..."
-                className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-slate-900 text-sm"
+                placeholder="Detalhes, especificações e orientações para a equipe."
+                className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-slate-900 text-xs focus:ring-2 focus:ring-indigo-500"
               />
             </div>
           </div>
@@ -381,237 +442,169 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                   Subtarefas Executáveis ({subtasks.length})
                 </h4>
                 <p className="text-xs text-slate-500">
-                  Regra: Ação executável direta com estado independente que você ou sua equipe executa.
+                  Apenas ações diretas da equipe interna com estado próprio.
                 </p>
               </div>
             </div>
 
-            {/* Subtask list header */}
-            <div className="flex items-center justify-between text-[11px] text-slate-500 bg-indigo-50/60 p-2 rounded-lg border border-indigo-100">
-              <span className="flex items-center gap-1.5 font-medium text-indigo-900">
-                <ArrowUpDown className="w-3.5 h-3.5 text-indigo-600" />
-                Arraste pelo ícone ⋮⋮ ou use as setas ↑↓ para reordenar a sequência
-              </span>
-              <span className="text-slate-400 font-medium">
-                {subtasks.length} item(ns)
-              </span>
-            </div>
-
-            {/* Subtask list */}
-            <div className="space-y-1.5">
-              {subtasks.map((sub, idx) => {
-                const isBeingDragged = draggedSubtaskIndex === idx;
-                const isTargeted = dragOverSubtaskIndex === idx;
-
-                return (
-                  <div
-                    key={sub.id}
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, idx)}
-                    onDragOver={(e) => handleDragOver(e, idx)}
-                    onDrop={(e) => handleDrop(e, idx)}
-                    className={`flex items-center justify-between gap-2 p-2.5 bg-white rounded-xl border transition-all ${
-                      isBeingDragged
-                        ? 'opacity-40 border-indigo-400 bg-indigo-50/50 scale-[0.99]'
-                        : isTargeted
-                        ? 'border-indigo-600 border-2 bg-indigo-50/70 shadow-md'
-                        : 'border-slate-200 hover:border-slate-300'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <div
-                        className="cursor-grab active:cursor-grabbing text-slate-400 hover:text-indigo-600 p-0.5 rounded transition-colors"
-                        title="Arrastar para reordenar"
-                      >
-                        <GripVertical className="w-4 h-4" />
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => handleToggleSubtaskStatus(sub.id)}
-                        className={`w-4 h-4 rounded flex items-center justify-center transition-colors shrink-0 ${
-                          sub.status === 'completed'
-                            ? 'bg-emerald-600 text-white'
-                            : sub.status === 'in_progress'
-                            ? 'bg-amber-500 text-white'
-                            : 'border border-slate-300 hover:border-slate-400'
-                        }`}
-                        title="Alternar status: Pendente ➔ Em Andamento ➔ Concluído"
-                      >
-                        {sub.status === 'completed' && <CheckCircle2 className="w-3.5 h-3.5" />}
-                        {sub.status === 'in_progress' && <Clock className="w-3 h-3" />}
-                      </button>
-
-                      <div className="flex items-center gap-2 flex-wrap min-w-0 flex-1">
-                        <span
-                          className={`text-xs font-medium truncate ${
-                            sub.status === 'completed'
-                              ? 'line-through text-slate-400'
-                              : 'text-slate-800'
-                          }`}
-                        >
-                          {idx + 1}. {sub.title}
-                        </span>
-
-                        {/* Date period badge for subtask */}
-                        {(sub.startDate || sub.dueDate) && (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                            <Calendar className="w-3 h-3 text-indigo-500" />
-                            {sub.startDate ? sub.startDate : 'Início'} ➔ {sub.dueDate || sub.endDate || 'Prazo'}
-                          </span>
-                        )}
-
-                        {sub.assignee && (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
-                            <User className="w-3 h-3 text-slate-400" />
-                            {sub.assignee}
-                          </span>
-                        )}
-                        {sub.ocNumber && (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-mono font-semibold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">
-                            {sub.ocNumber}
-                          </span>
-                        )}
-                        {sub.orderCost && (
-                          <span className="text-[11px] text-emerald-700 font-semibold shrink-0">
-                            {formatCurrencyBRL(sub.orderCost)}
-                          </span>
-                        )}
-
-                        {/* Indication if this subtask is locked by a dependency */}
-                        {(() => {
-                          const blockingDep = dependencies.find((d) => d.linkedSubtaskId === sub.id);
-                          if (!blockingDep) return null;
-                          return (
-                            <span
-                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border ${
-                                blockingDep.status === 'cleared'
-                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
-                                  : 'bg-amber-100 text-amber-900 border-amber-300'
-                              }`}
-                              title={`Esta subtarefa depende de: ${blockingDep.title}`}
-                            >
-                              {blockingDep.status === 'cleared' ? '✓ Desbloqueada por:' : '🔒 Aguarda:'} {blockingDep.departmentOrOwner}
-                            </span>
-                          );
-                        })()}
-                      </div>
-                    </div>
-
-                    {/* Controls: Up/Down arrows + Delete button */}
-                    <div className="flex items-center gap-1 shrink-0">
-                      <div className="flex items-center bg-slate-100 rounded-lg p-0.5 border border-slate-200">
-                        <button
-                          type="button"
-                          disabled={idx === 0}
-                          onClick={() => handleMoveSubtask(idx, 'up')}
-                          className="p-1 rounded text-slate-500 hover:text-slate-800 hover:bg-white disabled:opacity-20 disabled:hover:bg-transparent transition-colors"
-                          title="Mover para cima"
-                        >
-                          <ChevronUp className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          disabled={idx === subtasks.length - 1}
-                          onClick={() => handleMoveSubtask(idx, 'down')}
-                          className="p-1 rounded text-slate-500 hover:text-slate-800 hover:bg-white disabled:opacity-20 disabled:hover:bg-transparent transition-colors"
-                          title="Mover para baixo"
-                        >
-                          <ChevronDown className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveSubtask(sub.id)}
-                        className="text-slate-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition-colors"
-                        title="Excluir subtarefa"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+            {/* List */}
+            <div className="space-y-2">
+              {subtasks.map((sub, idx) => (
+                <div
+                  key={sub.id}
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, idx)}
+                  onDragOver={(e) => handleDragOver(e, idx)}
+                  onDrop={(e) => handleDrop(e, idx)}
+                  className={`flex items-center justify-between gap-2 p-2.5 bg-white rounded-xl border text-xs transition-all ${
+                    draggedSubtaskIndex === idx
+                      ? 'opacity-40 border-indigo-400 bg-indigo-50'
+                      : dragOverSubtaskIndex === idx
+                      ? 'border-indigo-500 ring-2 ring-indigo-200'
+                      : 'border-slate-200'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <GripVertical className="w-3.5 h-3.5 text-slate-400 cursor-grab shrink-0" />
+                    <span className="font-bold text-slate-400 w-4">{idx + 1}.</span>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleSubtaskStatus(sub.id)}
+                      className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border ${
+                        sub.status === 'completed'
+                          ? 'bg-emerald-600 border-emerald-600 text-white'
+                          : sub.status === 'in_progress'
+                          ? 'bg-blue-600 border-blue-600 text-white'
+                          : 'border-slate-300'
+                      }`}
+                    >
+                      {sub.status === 'completed' && <CheckCircle2 className="w-3 h-3" />}
+                    </button>
+                    <span
+                      className={`truncate ${
+                        sub.status === 'completed' ? 'line-through text-slate-400' : 'text-slate-800'
+                      }`}
+                    >
+                      {sub.title}
+                    </span>
+                    {sub.ocNumber && (
+                      <span className="px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 text-[10px] font-mono font-bold">
+                        {sub.ocNumber}
+                      </span>
+                    )}
+                    {sub.orderCost && (
+                      <span className="text-[10px] text-emerald-700 font-bold">
+                        {formatCurrencyBRL(sub.orderCost)}
+                      </span>
+                    )}
+                    {sub.financialStatus && (
+                      <span className="px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700 text-[10px] font-semibold border border-indigo-200">
+                        {sub.financialStatus}
+                      </span>
+                    )}
                   </div>
-                );
-              })}
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      disabled={idx === 0}
+                      onClick={() => handleMoveSubtask(idx, 'up')}
+                      className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-20"
+                    >
+                      <ChevronUp className="w-3 h-3" />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={idx === subtasks.length - 1}
+                      onClick={() => handleMoveSubtask(idx, 'down')}
+                      className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-20"
+                    >
+                      <ChevronDown className="w-3 h-3" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveSubtask(sub.id)}
+                      className="p-1 text-slate-400 hover:text-red-600"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
 
-            {/* Add Subtask Input */}
-            <div className="pt-2 border-t border-slate-200/80 space-y-2">
-              <div className="flex gap-2">
+            {/* Inputs to Add Subtask */}
+            <div className="pt-2 border-t border-slate-200 space-y-2 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
                 <input
                   type="text"
                   value={newSubtaskTitle}
                   onChange={(e) => setNewSubtaskTitle(e.target.value)}
-                  placeholder="Ex: Solicitar orçamento, Definir fornecedor, Abrir OC..."
-                  className="flex-1 px-3 py-1.5 text-xs rounded-lg border border-slate-300 text-slate-800 bg-white"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleAddSubtask();
-                    }
-                  }}
+                  placeholder="Nome da subtarefa executável (ex: Abrir OC, Solicitar orçamento)"
+                  className="sm:col-span-5 px-3 py-1.5 rounded-lg border border-slate-300 text-slate-800 bg-white"
                 />
+                <input
+                  type="text"
+                  value={newSubtaskAssignee}
+                  onChange={(e) => setNewSubtaskAssignee(e.target.value)}
+                  placeholder="Responsável interno"
+                  className="sm:col-span-3 px-3 py-1.5 rounded-lg border border-slate-300 text-slate-800 bg-white"
+                />
+                <input
+                  type="date"
+                  value={newSubtaskStartDate}
+                  onChange={(e) => setNewSubtaskStartDate(e.target.value)}
+                  className="sm:col-span-2 px-2 py-1.5 rounded-lg border border-slate-300 text-slate-800 bg-white"
+                  title="Data Início"
+                />
+                <input
+                  type="date"
+                  value={newSubtaskDueDate}
+                  onChange={(e) => setNewSubtaskDueDate(e.target.value)}
+                  className="sm:col-span-2 px-2 py-1.5 rounded-lg border border-slate-300 text-slate-800 bg-white"
+                  title="Data Fim / Prazo"
+                />
+              </div>
+
+              {/* OC e Situação Financeira */}
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
+                <input
+                  type="text"
+                  value={newSubtaskOc}
+                  onChange={(e) => setNewSubtaskOc(e.target.value)}
+                  placeholder="Nº da OC (ex: OC-2026/8941)"
+                  className="sm:col-span-3 px-3 py-1.5 text-xs rounded-lg border border-slate-300 bg-white text-slate-800 font-mono"
+                />
+                <input
+                  type="number"
+                  value={newSubtaskCost}
+                  onChange={(e) => setNewSubtaskCost(e.target.value)}
+                  placeholder="Valor R$ estimado"
+                  className="sm:col-span-3 px-3 py-1.5 text-xs rounded-lg border border-slate-300 bg-white text-slate-800"
+                />
+                <select
+                  value={newSubtaskFinancialStatus}
+                  onChange={(e) => setNewSubtaskFinancialStatus(e.target.value as FinancialStatus)}
+                  className="sm:col-span-4 px-2 py-1.5 text-xs rounded-lg border border-slate-300 bg-white text-slate-800 font-medium"
+                >
+                  <option value="PREVISTO">Situação: PREVISTO</option>
+                  <option value="EM_APROVACAO">Situação: EM APROVAÇÃO</option>
+                  <option value="APROVADO">Situação: APROVADO</option>
+                  <option value="CONTRATADO">Situação: CONTRATADO</option>
+                  <option value="FATURADO">Situação: FATURADO</option>
+                  <option value="ENCAMINHADO_PAGAMENTO">Situação: ENC. PAGAMENTO</option>
+                  <option value="PAGO">Situação: PAGO</option>
+                </select>
                 <button
                   type="button"
                   onClick={handleAddSubtask}
                   disabled={!newSubtaskTitle.trim()}
-                  className="px-3 py-1.5 bg-slate-900 text-white rounded-lg text-xs font-semibold hover:bg-slate-800 disabled:opacity-40 transition-colors shrink-0 flex items-center gap-1"
+                  className="sm:col-span-2 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white font-bold rounded-lg transition-colors"
                 >
-                  <Plus className="w-3.5 h-3.5" />
-                  Adicionar
+                  + Adicionar
                 </button>
               </div>
 
-              {/* Fields for subtask: Dates, Assignee, OC, Cost */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                <div>
-                  <input
-                    type="date"
-                    value={newSubtaskStartDate}
-                    onChange={(e) => setNewSubtaskStartDate(e.target.value)}
-                    placeholder="Data Início"
-                    className="w-full px-2.5 py-1 text-[11px] rounded border border-slate-200 bg-white text-slate-700"
-                    title="Data de Início da Subtarefa"
-                  />
-                </div>
-                <div>
-                  <input
-                    type="date"
-                    value={newSubtaskDueDate}
-                    onChange={(e) => setNewSubtaskDueDate(e.target.value)}
-                    placeholder="Data Fim / Prazo"
-                    className="w-full px-2.5 py-1 text-[11px] rounded border border-slate-200 bg-white text-slate-700"
-                    title="Data Fim / Prazo da Subtarefa"
-                  />
-                </div>
-                <div>
-                  <input
-                    type="text"
-                    value={newSubtaskAssignee}
-                    onChange={(e) => setNewSubtaskAssignee(e.target.value)}
-                    placeholder="Responsável (opcional)"
-                    className="w-full px-2.5 py-1 text-[11px] rounded border border-slate-200 bg-white text-slate-700"
-                  />
-                </div>
-                <div className="flex gap-1.5">
-                  <input
-                    type="text"
-                    value={newSubtaskOc}
-                    onChange={(e) => setNewSubtaskOc(e.target.value)}
-                    placeholder="Nº OC"
-                    className="w-1/2 px-2 py-1 text-[11px] rounded border border-slate-200 bg-white text-slate-700 font-mono"
-                  />
-                  <input
-                    type="number"
-                    value={newSubtaskCost}
-                    onChange={(e) => setNewSubtaskCost(e.target.value)}
-                    placeholder="R$ Valor"
-                    className="w-1/2 px-2 py-1 text-[11px] rounded border border-slate-200 bg-white text-slate-700"
-                  />
-                </div>
-              </div>
-
-              {/* Smart Alçada Suggestion when cost is typed */}
+              {/* Smart Alçada Suggestion */}
               {newSubtaskCost && parseFloat(newSubtaskCost) > 0 && (() => {
                 const costVal = parseFloat(newSubtaskCost);
                 const rule = getApprovalRuleForCost(costVal);
@@ -643,76 +636,102 @@ export const TaskModal: React.FC<TaskModalProps> = ({
             </div>
           </div>
 
-          {/* Section: Dependências e Bloqueios Externos */}
+          {/* Section: Dependências Externas (Relação Transversal) */}
           <div className="p-4 rounded-xl bg-amber-50/60 border border-amber-200/80 space-y-4">
             <div className="flex items-center justify-between">
               <div>
                 <h4 className="text-sm font-bold text-amber-950 flex items-center gap-1.5">
                   <ShieldAlert className="w-4 h-4 text-amber-600" />
-                  Dependências Externas & Bloqueios ({dependencies.length})
+                  Dependências Externas ({dependencies.length})
                 </h4>
                 <p className="text-xs text-amber-900/80">
-                  Aprovações ou entregas que dependem de terceiros (Superintendência, CEOP, Financeiro).
+                  Relação operacional com terceiros fora do controle direto (Superintendência, CEOP,
+                  Fornecedor).
                 </p>
               </div>
             </div>
 
             {/* Dependencies list */}
-            <div className="space-y-2">
-              {dependencies.map((dep) => (
-                <div
-                  key={dep.id}
-                  className="flex flex-col gap-2 p-3 bg-white rounded-xl border border-amber-200 text-xs"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-bold text-slate-900 truncate">{dep.title}</span>
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-200">
-                          {dep.departmentOrOwner}
-                        </span>
-                      </div>
-                      {(dep.startDate || dep.requestDate || dep.slaDeadline || dep.endDate) && (
-                        <div className="text-[11px] text-slate-500 flex items-center gap-2 mt-0.5">
+            <div className="space-y-2.5">
+              {dependencies.map((dep) => {
+                const { state, isBlocking, badgeClass, label } = getDependencyLifecycle(dep);
+                const linkedSub = subtasks.find((s) => s.id === dep.linkedSubtaskId);
+
+                return (
+                  <div
+                    key={dep.id}
+                    className="flex flex-col gap-2 p-3 bg-white rounded-xl border border-amber-200 text-xs"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0 space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-bold text-slate-900">{dep.title}</span>
+                          <span
+                            className={`px-2 py-0.2 rounded-full text-[10px] font-bold border ${badgeClass}`}
+                          >
+                            {label}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleToggleDepBlocking(dep.id)}
+                            className={`px-2 py-0.2 rounded text-[10px] font-bold border flex items-center gap-1 ${
+                              isBlocking
+                                ? 'bg-rose-600 text-white border-rose-700'
+                                : 'bg-slate-100 text-slate-700 border-slate-300'
+                            }`}
+                          >
+                            {isBlocking ? <Lock className="w-2.5 h-2.5" /> : <Unlock className="w-2.5 h-2.5" />}
+                            Bloqueando fluxo: {isBlocking ? 'SIM' : 'NÃO'}
+                          </button>
+                        </div>
+
+                        <div className="text-slate-600 text-[11px] flex items-center gap-2">
                           <span>
-                            Aberto: <strong>{dep.startDate || dep.requestDate || 'Sem data'}</strong>
+                            Setor/Responsável: <strong>{dep.departmentOrOwner}</strong>
+                          </span>
+                          <span>•</span>
+                          <span>
+                            Aberto: <strong>{dep.openedAt || dep.startDate || 'Sem data'}</strong>
                           </span>
                           <span>➔</span>
                           <span>
-                            Prazo SLA: <strong className="text-slate-800">{dep.endDate || dep.slaDeadline || 'Sem prazo'}</strong>
+                            SLA: <strong>{dep.slaDeadline || dep.endDate || 'Sem SLA'}</strong>
                           </span>
                         </div>
-                      )}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveDependency(dep.id)}
-                      className="text-slate-400 hover:text-red-600 p-1 rounded transition-colors"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
 
-                  {/* Explicit link to subtask */}
-                  {(() => {
-                    const linkedSub = subtasks.find((s) => s.id === dep.linkedSubtaskId);
-                    if (!linkedSub) return null;
-                    return (
-                      <div className="flex items-center gap-1.5 text-[11px] font-medium text-amber-900 bg-amber-50 px-2.5 py-1 rounded-md border border-amber-200">
-                        <span>🔒 Bloqueia especificamente a execução de:</span>
-                        <strong className="text-slate-900">&ldquo;{linkedSub.title}&rdquo;</strong>
+                        {dep.impactNextAction && (
+                          <div className="text-[11px] text-indigo-900 bg-indigo-50/70 px-2 py-0.5 rounded border border-indigo-200">
+                            <strong>Impacto/Próxima Ação:</strong> {dep.impactNextAction}
+                          </div>
+                        )}
+
+                        {linkedSub && (
+                          <div className="text-[11px] text-amber-900 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 flex items-center gap-1">
+                            <LinkIcon className="w-3 h-3 text-amber-700" />
+                            <span>
+                              Trava especificamente: <strong>&ldquo;{linkedSub.title}&rdquo;</strong>
+                            </span>
+                          </div>
+                        )}
                       </div>
-                    );
-                  })()}
 
-                  {/* Render approval chain stepper if present */}
-                  {dep.approvalStages && dep.approvalStages.length > 0 && (
-                    <div className="pt-2 border-t border-slate-100">
-                      <ApprovalChainBadge stages={dep.approvalStages} />
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveDependency(dep.id)}
+                        className="text-slate-400 hover:text-red-600 p-1 rounded transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
-                  )}
-                </div>
-              ))}
+
+                    {dep.approvalStages && dep.approvalStages.length > 0 && (
+                      <div className="pt-2 border-t border-slate-100">
+                        <ApprovalChainBadge stages={dep.approvalStages} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
             {/* Add Dependency Input */}
@@ -722,63 +741,93 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                   type="text"
                   value={newDepTitle}
                   onChange={(e) => setNewDepTitle(e.target.value)}
-                  placeholder="Ex: Fornecedor enviar proposta, Aprovação de OC..."
+                  placeholder="Nome da dependência (ex: Fornecedor enviar proposta, Aprovação de OC...)"
                   className="sm:col-span-4 px-3 py-1.5 rounded-lg border border-slate-300 text-slate-800 bg-white"
                 />
                 <input
                   type="text"
                   value={newDepOwner}
                   onChange={(e) => setNewDepOwner(e.target.value)}
-                  placeholder="Responsável (ex: CEOP / Diretoria)"
+                  placeholder="Responsável / Setor externo (ex: Charles / Superintendência)"
                   className="sm:col-span-3 px-3 py-1.5 rounded-lg border border-slate-300 text-slate-800 bg-white"
                 />
                 <input
                   type="date"
                   value={newDepStartDate}
                   onChange={(e) => setNewDepStartDate(e.target.value)}
-                  placeholder="Data Início"
                   className="sm:col-span-2 px-2 py-1.5 rounded-lg border border-slate-300 text-slate-800 bg-white"
-                  title="Data de Solicitação / Início da Dependência"
+                  title="Data de Abertura"
                 />
                 <input
                   type="date"
                   value={newDepSla}
                   onChange={(e) => setNewDepSla(e.target.value)}
-                  placeholder="Prazo SLA"
                   className="sm:col-span-2 px-2 py-1.5 rounded-lg border border-slate-300 text-slate-800 bg-white"
-                  title="Prazo Limite SLA"
+                  title="Prazo SLA"
                 />
                 <button
                   type="button"
                   onClick={handleAddDependency}
                   disabled={!newDepTitle.trim() || !newDepOwner.trim()}
-                  className="sm:col-span-1 flex items-center justify-center p-1.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-40 text-white rounded-lg transition-colors"
+                  className="sm:col-span-1 flex items-center justify-center p-1.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-40 text-white rounded-lg transition-colors font-bold"
                   title="Adicionar Dependência"
                 >
                   <Plus className="w-4 h-4" />
                 </button>
               </div>
 
-              {/* Subtask link selector */}
-              {subtasks.length > 0 && (
-                <div className="flex flex-col sm:flex-row sm:items-center gap-2 pt-1 text-slate-600">
-                  <span className="text-[11px] font-semibold text-amber-900 shrink-0">
-                    Trava qual subtarefa específica?
-                  </span>
+              {/* Subtask link & Impact row */}
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 pt-1 items-center">
+                <div className="sm:col-span-4">
                   <select
                     value={newDepLinkedSubtaskId}
                     onChange={(e) => setNewDepLinkedSubtaskId(e.target.value)}
-                    className="px-2.5 py-1 text-xs rounded-lg border border-amber-300 bg-white text-slate-800 flex-1"
+                    className="w-full px-2.5 py-1 text-xs rounded-lg border border-amber-300 bg-white text-slate-800"
                   >
-                    <option value="">Toda a tarefa (Bloqueio geral da demanda)</option>
+                    <option value="">Trava: Toda a tarefa operacional</option>
                     {subtasks.map((s, sIdx) => (
                       <option key={s.id} value={s.id}>
-                        Subtarefa {sIdx + 1}: {s.title}
+                        Trava subtarefa {sIdx + 1}: {s.title}
                       </option>
                     ))}
                   </select>
                 </div>
-              )}
+
+                <div className="sm:col-span-4">
+                  <input
+                    type="text"
+                    value={newDepImpact}
+                    onChange={(e) => setNewDepImpact(e.target.value)}
+                    placeholder="Impacto / Próxima ação que ela libera"
+                    className="w-full px-2.5 py-1 text-xs rounded-lg border border-amber-300 bg-white text-slate-800"
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <select
+                    value={newDepState}
+                    onChange={(e) => setNewDepState(e.target.value as DependencyLifecycleState)}
+                    className="w-full px-2 py-1 text-xs rounded-lg border border-amber-300 bg-white text-slate-800 font-semibold"
+                  >
+                    <option value="AGUARDANDO">AGUARDANDO</option>
+                    <option value="EM_RISCO">EM RISCO</option>
+                    <option value="ATENDIDA">ATENDIDA</option>
+                  </select>
+                </div>
+
+                <div className="sm:col-span-2 flex items-center gap-1.5">
+                  <input
+                    type="checkbox"
+                    id="chkBloqueando"
+                    checked={newDepIsBlocking}
+                    onChange={(e) => setNewDepIsBlocking(e.target.checked)}
+                    className="w-4 h-4 text-rose-600 rounded border-slate-300"
+                  />
+                  <label htmlFor="chkBloqueando" className="text-[11px] font-bold text-rose-900 cursor-pointer">
+                    Bloqueando fluxo
+                  </label>
+                </div>
+              </div>
             </div>
           </div>
 

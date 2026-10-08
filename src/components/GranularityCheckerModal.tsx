@@ -1,5 +1,17 @@
 import React, { useState } from 'react';
-import { X, CheckCircle2, AlertTriangle, HelpCircle, ArrowRight, ShieldCheck, Sparkles, Plus } from 'lucide-react';
+import {
+  X,
+  CheckCircle2,
+  AlertTriangle,
+  HelpCircle,
+  ArrowRight,
+  ShieldCheck,
+  Sparkles,
+  Plus,
+  Lock,
+  Unlock,
+  Layers,
+} from 'lucide-react';
 import { Task } from '../types';
 
 interface GranularityCheckerModalProps {
@@ -7,7 +19,12 @@ interface GranularityCheckerModalProps {
   onClose: () => void;
   tasks: Task[];
   onAddSubtask?: (taskId: string, title: string) => void;
-  onAddDependency?: (taskId: string, title: string, department: string) => void;
+  onAddDependency?: (
+    taskId: string,
+    title: string,
+    department: string,
+    bloqueandoFluxo?: boolean
+  ) => void;
 }
 
 export const GranularityCheckerModal: React.FC<GranularityCheckerModalProps> = ({
@@ -23,14 +40,20 @@ export const GranularityCheckerModal: React.FC<GranularityCheckerModalProps> = (
   const [hasIndependentState, setHasIndependentState] = useState<boolean | null>(null);
   const [needsTrackingOrBlocker, setNeedsTrackingOrBlocker] = useState<boolean | null>(null);
   const [responsibleThirdParty, setResponsibleThirdParty] = useState('');
+  const [isBlockingFlow, setIsBlockingFlow] = useState<boolean>(true);
   const [appliedMessage, setAppliedMessage] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
-  // Analysis Logic based on the prompt's rules
-  let diagnosis: 'pending_answers' | 'subtask_approved' | 'external_dependency' | 'keep_in_task' = 'pending_answers';
+  // Analysis Logic based on operational standard
+  let diagnosis: 'pending_answers' | 'subtask_approved' | 'external_dependency' | 'keep_in_task' =
+    'pending_answers';
 
-  if (isDirectExecution !== null && hasIndependentState !== null && needsTrackingOrBlocker !== null) {
+  if (
+    isDirectExecution !== null &&
+    hasIndependentState !== null &&
+    needsTrackingOrBlocker !== null
+  ) {
     if (isDirectExecution === false) {
       diagnosis = 'external_dependency';
     } else if (hasIndependentState === true && needsTrackingOrBlocker === true) {
@@ -54,7 +77,8 @@ export const GranularityCheckerModal: React.FC<GranularityCheckerModalProps> = (
       onAddDependency(
         selectedTaskId,
         candidateText.trim(),
-        responsibleThirdParty.trim() || 'Superintendência / Terceiro'
+        responsibleThirdParty.trim() || 'Superintendência / Terceiro',
+        isBlockingFlow
       );
       setAppliedMessage('Dependência externa vinculada à tarefa com sucesso!');
       setTimeout(() => {
@@ -64,12 +88,20 @@ export const GranularityCheckerModal: React.FC<GranularityCheckerModalProps> = (
     }
   };
 
-  const handlePreset = (text: string, isExec: boolean, isIndep: boolean, isTrack: boolean, dept = '') => {
+  const handlePreset = (
+    text: string,
+    isExec: boolean,
+    isIndep: boolean,
+    isTrack: boolean,
+    dept = '',
+    blocking = true
+  ) => {
     setCandidateText(text);
     setIsDirectExecution(isExec);
     setHasIndependentState(isIndep);
     setNeedsTrackingOrBlocker(isTrack);
     setResponsibleThirdParty(dept);
+    setIsBlockingFlow(blocking);
     setAppliedMessage(null);
   };
 
@@ -83,9 +115,11 @@ export const GranularityCheckerModal: React.FC<GranularityCheckerModalProps> = (
               <Sparkles className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-bold text-base sm:text-lg">Checador de Granularidade Operacional</h3>
+              <h3 className="font-bold text-base sm:text-lg">
+                Checador de Granularidade Operacional
+              </h3>
               <p className="text-xs text-indigo-200">
-                Critério: Ação executável + estado próprio + acompanhamento/bloqueio
+                Regra: Ação executável direta + estado próprio + acompanhamento operacional
               </p>
             </div>
           </div>
@@ -107,24 +141,49 @@ export const GranularityCheckerModal: React.FC<GranularityCheckerModalProps> = (
             <div className="flex flex-wrap gap-2 text-xs">
               <button
                 type="button"
-                onClick={() => handlePreset('Solicitar proposta comercial formalizada ao fornecedor eleito', true, true, true)}
+                onClick={() =>
+                  handlePreset(
+                    'Solicitar proposta comercial formalizada ao fornecedor eleito',
+                    true,
+                    true,
+                    true
+                  )
+                }
                 className="px-2.5 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-medium transition-colors"
               >
-                &ldquo;Solicitar proposta comercial formalizada&rdquo; (Sua Ação Interna)
+                &ldquo;Solicitar proposta formalizada&rdquo; (Ação Interna da Equipe)
               </button>
               <button
                 type="button"
-                onClick={() => handlePreset('Fornecedor enviar proposta formalizada', false, true, true, 'Fornecedor Eleito')}
+                onClick={() =>
+                  handlePreset(
+                    'Fornecedor enviar proposta formalizada',
+                    false,
+                    true,
+                    true,
+                    'Fornecedor PixelShow',
+                    true
+                  )
+                }
                 className="px-2.5 py-1.5 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 font-medium transition-colors"
               >
                 &ldquo;Fornecedor enviar proposta&rdquo; (Dependência de Terceiro)
               </button>
               <button
                 type="button"
-                onClick={() => handlePreset('Charles aprovar OC', false, true, true, 'Charles / Superintendência')}
+                onClick={() =>
+                  handlePreset(
+                    'Aprovação da OC pela Superintendência',
+                    false,
+                    true,
+                    true,
+                    'Charles / Superintendência',
+                    true
+                  )
+                }
                 className="px-2.5 py-1.5 rounded-lg border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 font-medium transition-colors"
               >
-                &ldquo;Charles aprovar OC&rdquo; (Aprovação de Terceiro)
+                &ldquo;Aprovação da OC&rdquo; (Aprovação / Bloqueio Externo)
               </button>
             </div>
           </div>
@@ -138,7 +197,7 @@ export const GranularityCheckerModal: React.FC<GranularityCheckerModalProps> = (
               type="text"
               value={candidateText}
               onChange={(e) => setCandidateText(e.target.value)}
-              placeholder="Ex: Aprovação da OC pela Superintendência, Definir fornecedor, etc."
+              placeholder="Ex: Definir fornecedor, Solicitar orçamento, Aprovação da OC..."
               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
             />
           </div>
@@ -147,17 +206,17 @@ export const GranularityCheckerModal: React.FC<GranularityCheckerModalProps> = (
           <div className="space-y-3.5 bg-slate-50 p-4 rounded-xl border border-slate-200">
             <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
               <HelpCircle className="w-4 h-4 text-indigo-600" />
-              Critérios de Avaliação
+              Critérios Oficiais de Granularidade
             </h4>
 
             {/* Q1 */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 bg-white rounded-lg border border-slate-200">
               <div>
                 <p className="text-sm font-medium text-slate-900">
-                  1. É uma ação direta executada por você ou pela sua equipe?
+                  1. É uma ação executável direta da sua equipe interna?
                 </p>
                 <p className="text-xs text-slate-500">
-                  Se for aprovação, liberação ou trabalho de outro departamento/fornecedor, marque &ldquo;Não&rdquo;.
+                  Se for aprovação, liberação de terceiro ou entrega de fornecedor fora do seu controle direto, marque &ldquo;Não&rdquo;.
                 </p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
@@ -190,10 +249,10 @@ export const GranularityCheckerModal: React.FC<GranularityCheckerModalProps> = (
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 bg-white rounded-lg border border-slate-200">
               <div>
                 <p className="text-sm font-medium text-slate-900">
-                  2. Tem estado independente?
+                  2. Possui estado independente próprio?
                 </p>
                 <p className="text-xs text-slate-500">
-                  Pode estar &ldquo;concluído&rdquo; enquanto a próxima etapa continua pendente?
+                  Pode estar &ldquo;concluído&rdquo; enquanto a próxima etapa permanece pendente?
                 </p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
@@ -226,10 +285,10 @@ export const GranularityCheckerModal: React.FC<GranularityCheckerModalProps> = (
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 bg-white rounded-lg border border-slate-200">
               <div>
                 <p className="text-sm font-medium text-slate-900">
-                  3. Há necessidade real de acompanhamento ou potencial de bloqueio?
+                  3. Há necessidade de acompanhamento operacional imediato?
                 </p>
                 <p className="text-xs text-slate-500">
-                  Não decompor por duração, mas por necessidade de gestão!
+                  Não decompor por duração, mas por necessidade real de gestão e controle.
                 </p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
@@ -266,22 +325,43 @@ export const GranularityCheckerModal: React.FC<GranularityCheckerModalProps> = (
                 <div className="bg-amber-50 border-amber-200 text-amber-950 p-4 rounded-xl space-y-3">
                   <div className="flex items-center gap-2 text-amber-800 font-bold text-sm">
                     <ShieldCheck className="w-5 h-5 text-amber-600" />
-                    <span>DIAGNÓSTICO: Cadastrar como DEPENDÊNCIA / BLOQUEIO EXTERNO</span>
+                    <span>DIAGNÓSTICO: DEPENDÊNCIA EXTERNA (Relação Transversal)</span>
                   </div>
                   <p className="text-xs text-amber-900 leading-relaxed">
-                    Você <strong>não executa essa ação</strong> (ex: assinatura ou aprovação de outra autoridade). Portanto, ela não deve inflar sua lista como uma subtarefa de execução sua. Registre-a como uma <strong>propriedade de dependência</strong> associada à tarefa com responsável, status de aprovação e follow-up ativo.
+                    Você <strong>não executa essa ação</strong> diretamente (ex: aprovação de Charles, entrega de proposta, laudo técnico). Portanto, ela não pertence à hierarquia como uma subtarefa executável sua.
+                    Cadastre-a como <strong>Dependência Externa</strong> vinculada à tarefa que ela impacta.
                   </p>
-                  <div>
-                    <label className="block text-xs font-bold text-amber-900 uppercase tracking-wider mb-1">
-                      Quem é o responsável externo ou setor?
-                    </label>
-                    <input
-                      type="text"
-                      value={responsibleThirdParty}
-                      onChange={(e) => setResponsibleThirdParty(e.target.value)}
-                      placeholder="Ex: Charles / Superintendência, CEOP, Financeiro"
-                      className="w-full px-3 py-2 text-xs bg-white rounded-lg border border-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                    />
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                    <div>
+                      <label className="block text-xs font-bold text-amber-900 uppercase tracking-wider mb-1">
+                        Responsável externo ou setor:
+                      </label>
+                      <input
+                        type="text"
+                        value={responsibleThirdParty}
+                        onChange={(e) => setResponsibleThirdParty(e.target.value)}
+                        placeholder="Ex: Charles / Superintendência, CEOP"
+                        className="w-full px-3 py-1.5 text-xs bg-white rounded-lg border border-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-5">
+                      <input
+                        type="checkbox"
+                        id="chkCheckerBlocking"
+                        checked={isBlockingFlow}
+                        onChange={(e) => setIsBlockingFlow(e.target.checked)}
+                        className="w-4 h-4 text-rose-600 rounded border-amber-300"
+                      />
+                      <label
+                        htmlFor="chkCheckerBlocking"
+                        className="text-xs font-bold text-rose-950 cursor-pointer flex items-center gap-1"
+                      >
+                        <Lock className="w-3.5 h-3.5 text-rose-600" />
+                        Esta dependência está BLOQUEANDO o fluxo agora?
+                      </label>
+                    </div>
                   </div>
                 </div>
               )}
@@ -293,7 +373,9 @@ export const GranularityCheckerModal: React.FC<GranularityCheckerModalProps> = (
                     <span>DIAGNÓSTICO: APROVADO COMO SUBTAREFA EXECUTÁVEL</span>
                   </div>
                   <p className="text-xs text-emerald-900 leading-relaxed">
-                    Perfeito! Este item atende ao critério de <strong>ação executável direta + estado próprio independente + necessidade de acompanhamento</strong>. Merece existir separadamente.
+                    Perfeito! Este item cumpre o critério operacional completo:
+                    <strong>ação executável direta + estado próprio independente + necessidade de acompanhamento imediato</strong>.
+                    Pertence legitimamente ao 4º nível hierárquico da matriz.
                   </p>
                 </div>
               )}
@@ -305,45 +387,46 @@ export const GranularityCheckerModal: React.FC<GranularityCheckerModalProps> = (
                     <span>DIAGNÓSTICO: Manter dentro da descrição da Tarefa</span>
                   </div>
                   <p className="text-xs text-slate-600 leading-relaxed">
-                    Como não possui estado independente ou potencial de bloqueio relevante, criar uma subtarefa para isso transformaria sua agenda em um checklist micro-burocrático. Mantenha apenas na descrição ou notas da tarefa.
+                    Como não possui estado independente ou potencial de bloqueio relevante, criar uma subtarefa transformaria sua matriz em micro-burocracia. Mantenha na descrição ou notas da tarefa.
                   </p>
                 </div>
               )}
 
               {/* Target Task Selector and Insert Button */}
-              {tasks.length > 0 && (diagnosis === 'subtask_approved' || diagnosis === 'external_dependency') && (
-                <div className="mt-4 pt-4 border-t border-slate-200 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-                  <div className="flex-1">
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">
-                      Vincular à Tarefa:
-                    </label>
-                    <select
-                      value={selectedTaskId}
-                      onChange={(e) => setSelectedTaskId(e.target.value)}
-                      className="w-full px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg text-slate-800 focus:ring-indigo-500"
-                    >
-                      {tasks.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.title}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+              {tasks.length > 0 &&
+                (diagnosis === 'subtask_approved' || diagnosis === 'external_dependency') && (
+                  <div className="mt-4 pt-4 border-t border-slate-200 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                    <div className="flex-1">
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">
+                        Vincular à Tarefa Operacional:
+                      </label>
+                      <select
+                        value={selectedTaskId}
+                        onChange={(e) => setSelectedTaskId(e.target.value)}
+                        className="w-full px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg text-slate-800 focus:ring-indigo-500"
+                      >
+                        {tasks.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.title}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
 
-                  <button
-                    onClick={handleApply}
-                    disabled={!candidateText.trim()}
-                    className="self-end sm:self-auto flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold shadow-md transition-all active:scale-95"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>
-                      {diagnosis === 'subtask_approved'
-                        ? 'Adicionar Subtarefa'
-                        : 'Vincular Dependência'}
-                    </span>
-                  </button>
-                </div>
-              )}
+                    <button
+                      onClick={handleApply}
+                      disabled={!candidateText.trim()}
+                      className="self-end sm:self-auto flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold shadow-md transition-all active:scale-95"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>
+                        {diagnosis === 'subtask_approved'
+                          ? 'Adicionar Subtarefa Executável'
+                          : 'Vincular Dependência Externa'}
+                      </span>
+                    </button>
+                  </div>
+                )}
             </div>
           )}
 

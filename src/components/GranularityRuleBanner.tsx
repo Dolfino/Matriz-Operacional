@@ -1,5 +1,16 @@
 import React, { useState } from 'react';
-import { Lightbulb, ChevronDown, ChevronUp, CheckCircle2, ShieldAlert, Sparkles, HelpCircle } from 'lucide-react';
+import {
+  Lightbulb,
+  ChevronDown,
+  ChevronUp,
+  CheckCircle2,
+  ShieldAlert,
+  Sparkles,
+  HelpCircle,
+  Lock,
+  Layers,
+  ArrowRight,
+} from 'lucide-react';
 
 interface GranularityRuleBannerProps {
   onOpenChecker: () => void;
@@ -21,14 +32,16 @@ export const GranularityRuleBanner: React.FC<GranularityRuleBannerProps> = ({ on
                 Padrão Operacional de Granularidade
               </span>
               <span className="text-xs text-indigo-200/70 hidden sm:inline">
-                Não decompor por duração, mas por gestão
+                Hierarquia de Execução + Relação Transversal de Terceiros
               </span>
             </div>
             <h2 className="text-base sm:text-lg font-bold text-white mt-0.5">
-              Objetivo → Marco → Tarefa → Subtarefa executável → Dependência externa
+              Objetivo → Marco → Tarefa → Subtarefa executável
             </h2>
-            <p className="text-xs sm:text-sm text-indigo-100/80 mt-1 max-w-2xl">
-              Crie subtarefas apenas com <strong>ação executável direta + estado próprio + necessidade de acompanhamento</strong>. Aprovações de terceiros (ex: Superintendência, CEOP) são tratadas como <strong>propriedades de dependência</strong>.
+            <p className="text-xs sm:text-sm text-indigo-100/80 mt-1 max-w-3xl">
+              <strong>Subtarefa executável:</strong> ação direta da equipe interna com estado próprio.
+              {' '}<strong>Dependência externa:</strong> relação operacional de terceiro vinculada à tarefa/subtarefa.
+              {' '}<strong>Bloqueio:</strong> quando a dependência efetivamente paralisa o avanço.
             </p>
           </div>
         </div>
@@ -46,41 +59,42 @@ export const GranularityRuleBanner: React.FC<GranularityRuleBannerProps> = ({ on
             onClick={() => setIsExpanded(!isExpanded)}
             className="flex items-center gap-1 text-xs text-indigo-200 hover:text-white px-3 py-2 bg-indigo-800/40 hover:bg-indigo-800/70 rounded-lg border border-indigo-700/50 transition-colors"
           >
-            <span>{isExpanded ? 'Ocultar detalhes' : 'Ver regra'}</span>
+            <span>{isExpanded ? 'Ocultar detalhes' : 'Ver regras'}</span>
             {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           </button>
         </div>
       </div>
 
       {isExpanded && (
-        <div className="border-t border-indigo-800/60 bg-slate-950/40 p-4 sm:p-5 text-xs sm:text-sm grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-indigo-950/50 border border-indigo-800/40 rounded-lg p-3.5">
+        <div className="border-t border-indigo-800/60 bg-slate-950/50 p-4 sm:p-5 text-xs sm:text-sm grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-indigo-950/60 border border-indigo-800/50 rounded-xl p-3.5">
             <div className="flex items-center gap-2 text-indigo-300 font-semibold mb-1.5">
               <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-              <span>1. Ação Executável Direta</span>
+              <span>1. Subtarefa Executável (Nível 4)</span>
             </div>
             <p className="text-slate-300 text-xs leading-relaxed">
-              Subtarefa é o que <strong>você ou sua equipe executa</strong> (ex: solicitar orçamento, abrir OC). Evita listar &ldquo;Charles assinar documento&rdquo; como se fosse seu trabalho direto.
+              Exige: <strong>ação executável direta + estado próprio + necessidade de acompanhamento operacional imediato</strong>.
+              É o trabalho que você ou sua equipe executa diretamente (ex: solicitar orçamento, abrir OC no ERP, conferir mapa de palco).
             </p>
           </div>
 
-          <div className="bg-indigo-950/50 border border-indigo-800/40 rounded-lg p-3.5">
-            <div className="flex items-center gap-2 text-indigo-300 font-semibold mb-1.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-              <span>2. Estado Independente</span>
-            </div>
-            <p className="text-slate-300 text-xs leading-relaxed">
-              Um item merece existir se pode estar &ldquo;concluído&rdquo; enquanto o próximo permanece pendente (ex: OC aberta desfaz o trabalho interno, mas aguarda liberação externa).
-            </p>
-          </div>
-
-          <div className="bg-indigo-950/50 border border-indigo-800/40 rounded-lg p-3.5">
+          <div className="bg-indigo-950/60 border border-indigo-800/50 rounded-xl p-3.5">
             <div className="flex items-center gap-2 text-amber-300 font-semibold mb-1.5">
               <ShieldAlert className="w-4 h-4 text-amber-400" />
-              <span>3. Dependência Externa (Bloqueio)</span>
+              <span>2. Dependência Externa (Transversal)</span>
             </div>
             <p className="text-slate-300 text-xs leading-relaxed">
-              Você <strong>não executa a aprovação</strong>; você acompanha a dependência externa. Registre o responsável (ex: Charles / CEOP), status e faça follow-up ativo.
+              <strong>Não é um 5º nível hierárquico.</strong> É uma ação de terceiro/setor externo (ex: aprovação de Charles, entrega de proposta, laudo dos Bombeiros) vinculada à tarefa ou subtarefa que ela libera.
+            </p>
+          </div>
+
+          <div className="bg-indigo-950/60 border border-indigo-800/50 rounded-xl p-3.5">
+            <div className="flex items-center gap-2 text-rose-300 font-semibold mb-1.5">
+              <Lock className="w-4 h-4 text-rose-400" />
+              <span>3. Bloqueio vs. Dependência</span>
+            </div>
+            <p className="text-slate-300 text-xs leading-relaxed">
+              Toda dependência é uma espera de terceiro, mas <strong>só é Bloqueio</strong> quando o fluxo da próxima ação fica paralisado. Se a dependência está em andamento sem travar a equipe, ela é apenas &ldquo;Aguardando Terceiros&rdquo;.
             </p>
           </div>
         </div>

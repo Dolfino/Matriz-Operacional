@@ -1,4 +1,7 @@
-export type DependencyStatus = 'pending' | 'waiting_approval' | 'blocked' | 'cleared';
+export type DependencyLifecycleState = 'AGUARDANDO' | 'ATENDIDA' | 'EM_RISCO';
+
+// Status mantido para retrocompatibilidade
+export type DependencyStatus = 'pending' | 'waiting_approval' | 'blocked' | 'cleared' | DependencyLifecycleState;
 export type DependencySeverity = 'blocker' | 'critical' | 'normal' | 'low';
 
 export type ApprovalLevel = 'Gerência' | 'Superintendência' | 'Diretoria' | 'CEO';
@@ -18,36 +21,67 @@ export interface FollowUpLog {
   author?: string;
 }
 
+export interface DependencyHistoryEntry {
+  id: string;
+  timestamp: string;
+  previousState?: DependencyLifecycleState | string;
+  newState: DependencyLifecycleState | string;
+  wasBlocking: boolean;
+  isBlocking: boolean;
+  note?: string;
+  author?: string;
+}
+
 export interface Dependency {
   id: string;
   title: string; // Ex: "Aprovação da OC pela Superintendência"
   departmentOrOwner: string; // Ex: "Charles / Superintendência", "CEOP"
-  status: DependencyStatus;
-  severity: DependencySeverity;
-  startDate?: string; // Data Início / Solicitação da dependência
-  requestDate?: string; // Alias/retrocompatibilidade
-  endDate?: string; // Data Fim / Prazo SLA
-  slaDeadline?: string; // Alias/retrocompatibilidade
+  status: DependencyStatus; // Compatibilidade com versões anteriores
+  severity?: DependencySeverity; // Criticidade operacional
+  state?: DependencyLifecycleState; // Ciclo de vida próprio: AGUARDANDO | ATENDIDA | EM_RISCO
+  bloqueandoFluxo: boolean; // Separação explícita: bloqueandoFluxo = true | false
+
+  openedAt?: string; // Data de abertura da dependência
+  startDate?: string; // Alias
+  requestDate?: string; // Alias
+
+  slaDeadline?: string; // Prazo / SLA limite
+  endDate?: string; // Alias
+
+  resolvedAt?: string; // Data em que foi efetivamente atendida
+  impactNextAction?: string; // Impacto operacional / Próxima ação que ela libera
   notes?: string;
-  followUps: FollowUpLog[];
-  linkedSubtaskId?: string; // Subtarefa que depende disto
-  approvalStages?: ApprovalStage[]; // Cadeia de aprovação por alçadas
+
+  followUps: FollowUpLog[]; // Histórico de cobranças / follow-ups
+  history?: DependencyHistoryEntry[]; // Histórico de mudanças de estado operacional
+  linkedSubtaskId?: string; // Subtarefa vinculada impactada
+  approvalStages?: ApprovalStage[]; // Esteira de aprovações
 }
 
 export type SubtaskStatus = 'pending' | 'in_progress' | 'completed';
 
+export type FinancialStatus =
+  | 'PREVISTO'
+  | 'EM_APROVACAO'
+  | 'APROVADO'
+  | 'CONTRATADO'
+  | 'FATURADO'
+  | 'ENCAMINHADO_PAGAMENTO'
+  | 'PAGO';
+
 export interface Subtask {
   id: string;
-  title: string; // Ex: "Solicitar orçamento", "Definir fornecedor", "Abrir OC", "Confirmar contratação"
+  title: string;
   status: SubtaskStatus;
   assignee?: string;
   ocNumber?: string;
   orderCost?: number;
-  startDate?: string; // Data Início da subtarefa
-  dueDate?: string; // Data Fim / Prazo da subtarefa
-  endDate?: string; // Alias para sincronização de período
+  financialStatus?: FinancialStatus; // Novo: controle granular de status financeiro
+  startDate?: string;
+  dueDate?: string;
+  endDate?: string;
   notes?: string;
-  isExternalDependency?: boolean; // Se marcado, avisa para migrar para dependência
+  isExternalDependency?: boolean;
 }
 
 export type TaskStatus = 'not_started' | 'in_progress' | 'blocked' | 'completed';
@@ -55,33 +89,37 @@ export type TaskCategory = 'Fornecedor & OC' | 'Infraestrutura & Montagem' | 'Au
 
 export interface Task {
   id: string;
-  title: string; // Ex: "Climatizadores", "Montagem do Piso Branco"
+  title: string;
   description?: string;
   category: TaskCategory;
   priority: 'high' | 'medium' | 'low';
-  startDate?: string; // Data Início da tarefa
-  deadline?: string; // Data Fim / Prazo final
-  endDate?: string; // Alias de período
+  startDate?: string;
+  deadline?: string;
+  endDate?: string;
   subtasks: Subtask[];
-  dependencies: Dependency[];
+  dependencies: Dependency[]; // Relações operacionais vinculadas (NÃO nível hierárquico)
 }
+
+export type MilestoneStatus = 'planejado' | 'em_andamento' | 'concluido' | 'atrasado';
 
 export interface Milestone {
   id: string;
-  title: string; // Ex: "Infraestrutura contratada", "Espaço pronto"
-  startDate?: string; // Data Início do marco
-  targetDate?: string; // Data Fim / Meta do marco
-  endDate?: string; // Alias de período
+  title: string;
+  status?: MilestoneStatus;
+  completedAt?: string; // Data em que o marco foi efetivamente concluído
+  startDate?: string;
+  targetDate?: string; // Prazo planejado
+  endDate?: string;
   description?: string;
   tasks: Task[];
 }
 
 export interface Objective {
   id: string;
-  title: string; // Ex: "Encerramento CFM — 03/10"
-  startDate?: string; // Data Início do projeto/objetivo
-  eventDate: string; // "2026-10-03" (Data Fim / Evento)
-  endDate?: string; // Alias de período
+  title: string;
+  startDate?: string;
+  eventDate: string;
+  endDate?: string;
   description?: string;
   category: string;
   status: 'active' | 'archived' | 'completed';
