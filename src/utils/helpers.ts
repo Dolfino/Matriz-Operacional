@@ -6,6 +6,8 @@ import {
   Milestone,
   DependencyLifecycleState,
   FinancialStatus,
+  ExecutionSession,
+  ExecutionSessionEvent,
 } from '../types';
 
 /**
@@ -695,3 +697,364 @@ export function getTaskEffectiveStatus(task: Task): 'completed' | 'blocked' | 'i
   }
   return 'not_started';
 }
+
+/**
+ * Métricas Temporais da Subtarefa (Time Blocking / Sessões de Execução)
+ * 
+ * Invariantes da Matriz (Etapa 4.3B):
+ * - estimatedMinutes: Quanto trabalho eu tenho? (esforço total planejado na subtarefa)
+ * - reservedUpcomingMinutes: Tempo ainda reservado em sessões ativas/futuras (scheduled, in_progress)
+ * - plannedHistoricalMinutes: Todo o tempo que foi planejado, inclusive concluído, perdido, reagendado
+ * - actualMinutes: Tempo efetivamente consumido em foco (soma apenas intervalos ativos START/RESUME -> PAUSE/COMPLETE)
+ * - planningGapMinutes: estimatedMinutes - reservedUpcomingMinutes (gap de trabalho sem horário reservado)
+ * - coveragePercent: (reservedUpcomingMinutes / estimatedMinutes) * 100 (SEM clamp a 100%, pode exceder)
+ * - coverageDeltaMinutes: reservedUpcomingMinutes - estimatedMinutes (excedente ou déficit em minutos)
+ */
+export interface SubtaskTimeMetrics {
+  estimatedMinutes: number;
+  reservedMinutes: number; // mantido para compatibilidade = reservedUpcomingMinutes
+  reservedUpcomingMinutes: number; // tempo ainda reservado em sessões futuras/ativas
+  plannedHistoricalMinutes: number; // todo o tempo que foi planejado na história
+  actualMinutes: number;
+  remainingMinutes: number;
+  planningGapMinutes: number; // estimatedMinutes - reservedUpcomingMinutes
+  coveragePercent: number; // SEM clamp, pode passar de 100% (ex: 150%)
+  coverageDeltaMinutes: number; // > 0 quando acima da estimativa, < 0 quando faltam horas
+  progressTimePercent: number; // Realizado / Estimado (%)
+  activeSession?: ExecutionSession;
+}
+
+export function getSubtaskTimeMetrics(subtask: Subtask): SubtaskTimeMetrics {
+  const estimatedMinutes = Math.max(0, subtask.estimatedMinutes || 0);
+  const sessions = subtask.executionSessions || [];
+
+  // Estados que entram em reservedUpcomingMinutes: 'scheduled' e 'in_progress'
+  // Estados que NÃO entram: 'completed', 'cancelled', 'missed', 'rescheduled'
+  const upcomingSessions = sessions.filter(
+    (s) => s.status === 'scheduled' || s.status === 'in_progress'
+  );
+
+  const reservedUpcomingMinutes = upcomingSessions.reduce(
+    (sum, s) => sum + (s.plannedDurationMinutes || 0),
+    0
+  );
+
+  // Todo o tempo planejado na história (exclui apenas cancelled puramente descartados)
+  const plannedHistoricalMinutes = sessions
+    .filter((s) => s.status !== 'cancelled' || s.cancellationReason === 'SUBTASK_COMPLETED')
+    .reduce((sum, s) => sum + (s.plannedDurationMinutes || 0), 0);
+
+  // Tempo realizado em foco
+  const actualMinutes = sessions.reduce((sum, s) => {
+    if (s.events && s.events.length > 0) {
+      const { actualMinutes: fromEvt } = calculateActualMinutesFromEvents(s.events, s.actualDurationMinutes);
+      return sum + fromEvt;
+    }
+    if (s.actualDurationMinutes !== undefined && s.actualDurationMinutes !== null) {
+      return sum + s.actualDurationMinutes;
+    }
+    if (s.status === 'completed') {
+      return sum + (s.plannedDurationMinutes || 0);
+    }
+    return sum;
+  }, 0);
+
+  const remainingMinutes = Math.max(0, estimatedMinutes - actualMinutes);
+
+  // Gap de planejamento: trabalho estimado ainda sem horário reservado
+  const planningGapMinutes = estimatedMinutes - reservedUpcomingMinutes;
+
+  // Cobertura SEM clamp: pode passar de 100% (ex: 60min estimado, 90min reservado = 150%)
+  const coveragePercent =
+    estimatedMinutes > 0 ? Math.round((reservedUpcomingMinutes / estimatedMinutes) * 100) : 0;
+
+  const coverageDeltaMinutes = reservedUpcomingMinutes - estimatedMinutes;
+
+  const progressTimePercent =
+    estimatedMinutes > 0 ? Math.round((actualMinutes / estimatedMinutes) * 100) : 0;
+
+  const activeSession = sessions.find((s) => s.status === 'in_progress');
+
+  return {
+    estimatedMinutes,
+    reservedMinutes: reservedUpcomingMinutes,
+    reservedUpcomingMinutes,
+    plannedHistoricalMinutes,
+    actualMinutes,
+    remainingMinutes,
+    planningGapMinutes,
+    coveragePercent,
+    coverageDeltaMinutes,
+    progressTimePercent,
+    activeSession,
+  };
+}
+
+export function formatMinutes(minutes: number): string {
+  if (!minutes || minutes === 0) return '0 min';
+  const isNegative = minutes < 0;
+  const abs = Math.abs(minutes);
+  const sign = isNegative ? '-' : '';
+  if (abs < 60) return `${sign}${abs} min`;
+  const hours = Math.floor(abs / 60);
+  const remainingMin = abs % 60;
+  if (remainingMin === 0) return `${sign}${hours}h`;
+  return `${sign}${hours}h ${remainingMin}m`;
+}
+
+export interface ObjectiveTimeSummary {
+  totalEstimatedMinutes: number;
+  totalReservedMinutes: number; // tempo ainda reservado futuro
+  totalPlannedHistoricalMinutes: number;
+  totalActualMinutes: number;
+  totalRemainingMinutes: number;
+  totalPlanningGapMinutes: number;
+  coveragePercent: number; // sem clamp
+  totalSessionsCount: number;
+  completedSessionsCount: number;
+  scheduledSessionsCount: number;
+}
+
+export function calculateObjectiveTimeMetrics(objective: Objective): ObjectiveTimeSummary {
+  let totalEstimatedMinutes = 0;
+  let totalReservedMinutes = 0;
+  let totalPlannedHistoricalMinutes = 0;
+  let totalActualMinutes = 0;
+  let totalSessionsCount = 0;
+  let completedSessionsCount = 0;
+  let scheduledSessionsCount = 0;
+
+  objective.milestones.forEach((m) => {
+    m.tasks.forEach((t) => {
+      t.subtasks.forEach((s) => {
+        const metrics = getSubtaskTimeMetrics(s);
+        totalEstimatedMinutes += metrics.estimatedMinutes;
+        totalReservedMinutes += metrics.reservedUpcomingMinutes;
+        totalPlannedHistoricalMinutes += metrics.plannedHistoricalMinutes;
+        totalActualMinutes += metrics.actualMinutes;
+
+        const sessions = s.executionSessions || [];
+        sessions.forEach((session) => {
+          if (session.status !== 'cancelled') {
+            totalSessionsCount++;
+            if (session.status === 'completed') {
+              completedSessionsCount++;
+            } else if (session.status === 'scheduled') {
+              scheduledSessionsCount++;
+            }
+          }
+        });
+      });
+    });
+  });
+
+  const totalRemainingMinutes = Math.max(0, totalEstimatedMinutes - totalActualMinutes);
+  const totalPlanningGapMinutes = totalEstimatedMinutes - totalReservedMinutes;
+  const coveragePercent =
+    totalEstimatedMinutes > 0
+      ? Math.round((totalReservedMinutes / totalEstimatedMinutes) * 100)
+      : 0;
+
+  return {
+    totalEstimatedMinutes,
+    totalReservedMinutes,
+    totalPlannedHistoricalMinutes,
+    totalActualMinutes,
+    totalRemainingMinutes,
+    totalPlanningGapMinutes,
+    coveragePercent,
+    totalSessionsCount,
+    completedSessionsCount,
+    scheduledSessionsCount,
+  };
+}
+
+/**
+ * Converte string de horário "HH:mm" em minutos a partir da meia-noite (0..1439).
+ */
+export function timeStringToMinutes(timeStr: string): number {
+  if (!timeStr) return 0;
+  const parts = timeStr.trim().split(':');
+  const h = parseInt(parts[0], 10) || 0;
+  const m = parseInt(parts[1], 10) || 0;
+  return h * 60 + m;
+}
+
+/**
+ * Converte minutos a partir da meia-noite em formato "HH:mm".
+ */
+export function minutesToTimeString(minutes: number): string {
+  const norm = Math.max(0, Math.min(1439, Math.floor(minutes)));
+  const h = Math.floor(norm / 60);
+  const m = norm % 60;
+  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+}
+
+/**
+ * Calcula a sobreposição em minutos entre dois intervalos de horário (mesmo dia civil).
+ * Retorna 0 se não houver sobreposição.
+ */
+export function calculateTimeOverlapMinutes(
+  startA: string,
+  endA: string,
+  startB: string,
+  endB: string
+): number {
+  const sA = timeStringToMinutes(startA);
+  const eA = timeStringToMinutes(endA);
+  const sB = timeStringToMinutes(startB);
+  const eB = timeStringToMinutes(endB);
+
+  const startMax = Math.max(sA, sB);
+  const endMin = Math.min(eA, eB);
+
+  if (endMin > startMax) {
+    return endMin - startMax;
+  }
+  return 0;
+}
+
+/**
+ * Conflito de Planejamento entre duas Sessões de Execução (sobreposição de horário no mesmo dia).
+ */
+export interface ScheduleConflict {
+  sessionAId: string;
+  sessionBId: string;
+  sessionATitle: string;
+  sessionBTitle: string;
+  date: string;
+  overlapMinutes: number;
+  message: string;
+}
+
+/**
+ * Detecta todos os conflitos de planejamento (sobreposições na agenda) para uma lista de sessões.
+ * Não bloqueia o cadastro, mas expõe alertas claros de colisão de tempo.
+ */
+export function detectScheduleConflicts(
+  sessions: Array<{
+    id: string;
+    subtaskTitle: string;
+    date: string;
+    startTime: string;
+    endTime: string;
+    status: string;
+  }>
+): ScheduleConflict[] {
+  const conflicts: ScheduleConflict[] = [];
+  const activeSessions = sessions.filter(
+    (s) => s.status !== 'cancelled' && s.date && s.startTime && s.endTime
+  );
+
+  for (let i = 0; i < activeSessions.length; i++) {
+    for (let j = i + 1; j < activeSessions.length; j++) {
+      const a = activeSessions[i];
+      const b = activeSessions[j];
+      if (a.date === b.date && a.id !== b.id) {
+        const overlap = calculateTimeOverlapMinutes(
+          a.startTime,
+          a.endTime,
+          b.startTime,
+          b.endTime
+        );
+        if (overlap > 0) {
+          conflicts.push({
+            sessionAId: a.id,
+            sessionBId: b.id,
+            sessionATitle: a.subtaskTitle,
+            sessionBTitle: b.subtaskTitle,
+            date: a.date,
+            overlapMinutes: overlap,
+            message: `Sobreposição de ${overlap} minuto(s) no dia ${a.date} entre "${a.subtaskTitle}" (${a.startTime}–${a.endTime}) e "${b.subtaskTitle}" (${b.startTime}–${b.endTime}).`,
+          });
+        }
+      }
+    }
+  }
+
+  return conflicts;
+}
+
+/**
+ * Reconstrução canônica do tempo efetivamente realizado a partir de histórico append-only de eventos.
+ * Permite pausas, retomadas e cancelamento preservando os segmentos reais de foco.
+ * 
+ * Exemplo do usuário:
+ * INICIAR 10:00 -> PAUSAR 10:12 (12m) -> RETOMAR 10:20 -> CONCLUIR 10:38 (18m) = 30m realizado (e não 38m).
+ */
+export function calculateActualMinutesFromEvents(
+  events?: ExecutionSessionEvent[],
+  fallbackActualMinutes?: number
+): {
+  actualMinutes: number;
+  pauseMinutes: number;
+  interruptionsCount: number;
+  isCurrentlyRunning: boolean;
+} {
+  if (!events || events.length === 0) {
+    return {
+      actualMinutes: fallbackActualMinutes || 0,
+      pauseMinutes: 0,
+      interruptionsCount: 0,
+      isCurrentlyRunning: false,
+    };
+  }
+
+  let totalActiveMs = 0;
+  let totalPauseMs = 0;
+  let interruptionsCount = 0;
+  let runningStartMs: number | null = null;
+  let pauseStartMs: number | null = null;
+
+  // Helper para parsear timestamp (ISO ou hora HH:mm)
+  const parseEventTime = (tStr: string): number => {
+    if (!tStr) return 0;
+    // Se for formato HH:mm
+    if (/^\d{1,2}:\d{2}$/.test(tStr.trim())) {
+      const parts = tStr.trim().split(':');
+      const h = parseInt(parts[0], 10);
+      const m = parseInt(parts[1], 10);
+      return (h * 60 + m) * 60 * 1000;
+    }
+    const ms = Date.parse(tStr);
+    return isNaN(ms) ? 0 : ms;
+  };
+
+  events.forEach((evt) => {
+    const evtTime = parseEventTime(evt.timestamp);
+    if (evt.type === 'START' || evt.type === 'RESUME') {
+      if (pauseStartMs !== null && evtTime >= pauseStartMs) {
+        totalPauseMs += evtTime - pauseStartMs;
+        pauseStartMs = null;
+      }
+      runningStartMs = evtTime;
+    } else if (evt.type === 'PAUSE') {
+      if (runningStartMs !== null && evtTime >= runningStartMs) {
+        totalActiveMs += evtTime - runningStartMs;
+        runningStartMs = null;
+      }
+      pauseStartMs = evtTime;
+      interruptionsCount++;
+    } else if (evt.type === 'COMPLETE' || evt.type === 'CANCEL') {
+      if (runningStartMs !== null && evtTime >= runningStartMs) {
+        totalActiveMs += evtTime - runningStartMs;
+        runningStartMs = null;
+      }
+      if (pauseStartMs !== null && evtTime >= pauseStartMs) {
+        totalPauseMs += evtTime - pauseStartMs;
+        pauseStartMs = null;
+      }
+    }
+  });
+
+  const actualMinutes = Math.round(totalActiveMs / (60 * 1000));
+  const pauseMinutes = Math.round(totalPauseMs / (60 * 1000));
+
+  return {
+    actualMinutes: actualMinutes > 0 ? actualMinutes : fallbackActualMinutes || 0,
+    pauseMinutes,
+    interruptionsCount,
+    isCurrentlyRunning: runningStartMs !== null,
+  };
+}
+

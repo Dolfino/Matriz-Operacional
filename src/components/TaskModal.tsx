@@ -65,6 +65,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   const [newSubtaskDueDate, setNewSubtaskDueDate] = useState('');
   const [newSubtaskOc, setNewSubtaskOc] = useState('');
   const [newSubtaskCost, setNewSubtaskCost] = useState('');
+  const [newSubtaskEstimate, setNewSubtaskEstimate] = useState('45');
   const [newSubtaskFinancialStatus, setNewSubtaskFinancialStatus] =
     useState<FinancialStatus>('PREVISTO');
 
@@ -137,6 +138,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       ocNumber: newSubtaskOc.trim() || undefined,
       orderCost: newSubtaskCost ? parseFloat(newSubtaskCost) : undefined,
       financialStatus: newSubtaskCost || newSubtaskOc ? newSubtaskFinancialStatus : undefined,
+      estimatedMinutes: newSubtaskEstimate ? Math.max(0, parseInt(newSubtaskEstimate, 10)) : 45,
     };
 
     setSubtasks([...subtasks, newSub]);
@@ -146,6 +148,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     setNewSubtaskDueDate('');
     setNewSubtaskOc('');
     setNewSubtaskCost('');
+    setNewSubtaskEstimate('45');
     setNewSubtaskFinancialStatus('PREVISTO');
   };
 
@@ -502,6 +505,11 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                         {sub.financialStatus}
                       </span>
                     )}
+                    {sub.estimatedMinutes && (
+                      <span className="px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 text-[10px] font-mono border border-slate-200">
+                        ⏱️ {sub.estimatedMinutes}m est.
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     <button
@@ -565,26 +573,26 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 />
               </div>
 
-              {/* OC e Situação Financeira */}
+              {/* OC, Situação Financeira e Tempo Estimado */}
               <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
                 <input
                   type="text"
                   value={newSubtaskOc}
                   onChange={(e) => setNewSubtaskOc(e.target.value)}
                   placeholder="Nº da OC (ex: OC-2026/8941)"
-                  className="sm:col-span-3 px-3 py-1.5 text-xs rounded-lg border border-slate-300 bg-white text-slate-800 font-mono"
+                  className="sm:col-span-2 px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 bg-white text-slate-800 font-mono"
                 />
                 <input
                   type="number"
                   value={newSubtaskCost}
                   onChange={(e) => setNewSubtaskCost(e.target.value)}
                   placeholder="Valor R$ estimado"
-                  className="sm:col-span-3 px-3 py-1.5 text-xs rounded-lg border border-slate-300 bg-white text-slate-800"
+                  className="sm:col-span-2 px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 bg-white text-slate-800"
                 />
                 <select
                   value={newSubtaskFinancialStatus}
                   onChange={(e) => setNewSubtaskFinancialStatus(e.target.value as FinancialStatus)}
-                  className="sm:col-span-4 px-2 py-1.5 text-xs rounded-lg border border-slate-300 bg-white text-slate-800 font-medium"
+                  className="sm:col-span-3 px-2 py-1.5 text-xs rounded-lg border border-slate-300 bg-white text-slate-800 font-medium"
                 >
                   <option value="PREVISTO">Situação: PREVISTO</option>
                   <option value="EM_APROVACAO">Situação: EM APROVAÇÃO</option>
@@ -594,11 +602,24 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                   <option value="ENCAMINHADO_PAGAMENTO">Situação: ENC. PAGAMENTO</option>
                   <option value="PAGO">Situação: PAGO</option>
                 </select>
+                <div className="sm:col-span-3 flex items-center gap-1 bg-white border border-slate-300 rounded-lg px-2 py-1">
+                  <input
+                    type="number"
+                    min="5"
+                    step="5"
+                    value={newSubtaskEstimate}
+                    onChange={(e) => setNewSubtaskEstimate(e.target.value)}
+                    placeholder="Tempo"
+                    className="w-full text-xs text-slate-800 font-medium focus:outline-hidden"
+                    title="Tempo total estimado em minutos para esta subtarefa"
+                  />
+                  <span className="text-[10px] text-slate-500 font-bold shrink-0">min est.</span>
+                </div>
                 <button
                   type="button"
                   onClick={handleAddSubtask}
                   disabled={!newSubtaskTitle.trim()}
-                  className="sm:col-span-2 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white font-bold rounded-lg transition-colors"
+                  className="sm:col-span-2 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white font-bold rounded-lg transition-colors cursor-pointer"
                 >
                   + Adicionar
                 </button>

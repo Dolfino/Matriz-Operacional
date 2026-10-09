@@ -39,6 +39,21 @@ export const INITIAL_OBJECTIVES: Objective[] = [
                 dueDate: '2026-09-18',
                 endDate: '2026-09-18',
                 notes: 'Orçamentos recebidos de ClimaSul, AirClean e VentoForte.',
+                estimatedMinutes: 45,
+                executionSessions: [
+                  {
+                    id: 'sess-clim-1',
+                    subtaskId: 'sub-clim-1',
+                    date: '2026-09-17',
+                    startTime: '10:00',
+                    endTime: '10:30',
+                    plannedDurationMinutes: 30,
+                    actualDurationMinutes: 24,
+                    sessionGoal: 'Contatar fornecedores e solicitar propostas',
+                    status: 'completed',
+                    completedAt: '2026-09-17T10:24:00Z',
+                  },
+                ],
               },
               {
                 id: 'sub-clim-2',
@@ -49,6 +64,7 @@ export const INITIAL_OBJECTIVES: Objective[] = [
                 dueDate: '2026-09-20',
                 endDate: '2026-09-20',
                 notes: 'AirClean selecionada pelo menor valor e prazo de montagem garantido.',
+                estimatedMinutes: 30,
               },
               {
                 id: 'sub-clim-3',
@@ -62,6 +78,7 @@ export const INITIAL_OBJECTIVES: Objective[] = [
                 dueDate: '2026-09-21',
                 endDate: '2026-09-21',
                 notes: 'OC aberta no sistema ERP e encaminhada para a Superintendência.',
+                estimatedMinutes: 20,
               },
               {
                 id: 'sub-clim-4',
@@ -72,6 +89,29 @@ export const INITIAL_OBJECTIVES: Objective[] = [
                 dueDate: '2026-09-26',
                 endDate: '2026-09-26',
                 notes: 'Aguardando formalização para envio da nota de empenho/contrato assinado.',
+                estimatedMinutes: 60,
+                executionSessions: [
+                  {
+                    id: 'sess-clim-2',
+                    subtaskId: 'sub-clim-4',
+                    date: '2026-10-08',
+                    startTime: '10:00',
+                    endTime: '10:30',
+                    plannedDurationMinutes: 30,
+                    sessionGoal: 'Solicitar orçamento aos fornecedores mapeados e cobrar despacho de contratação',
+                    status: 'scheduled',
+                  },
+                  {
+                    id: 'sess-clim-3',
+                    subtaskId: 'sub-clim-4',
+                    date: '2026-10-08',
+                    startTime: '15:00',
+                    endTime: '15:20',
+                    plannedDurationMinutes: 20,
+                    sessionGoal: 'Checagem final com compras e emissão de autorização de montagem',
+                    status: 'scheduled',
+                  },
+                ],
               },
             ],
             dependencies: [

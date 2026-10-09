@@ -27,6 +27,7 @@ import {
   AlertCircle,
   HelpCircle,
   Link as LinkIcon,
+  Target,
 } from 'lucide-react';
 import {
   Objective,
@@ -45,6 +46,8 @@ import {
   getDependencyWaitingTimeDays,
   formatCurrencyBRL,
   getSeverityLabel,
+  getSubtaskTimeMetrics,
+  formatMinutes,
 } from '../utils/helpers';
 import { ApprovalChainBadge } from './ApprovalChainBadge';
 
@@ -56,6 +59,7 @@ interface TreeViewProps {
   onReorderSubtasks?: (milestoneId: string, taskId: string, startIndex: number, endIndex: number) => void;
   onMoveSubtask?: (milestoneId: string, taskId: string, subtaskId: string, direction: 'up' | 'down') => void;
   onOpenFollowUpModal: (dependency: Dependency, taskTitle: string) => void;
+  onOpenSessionModal?: (milestoneId?: string, taskId?: string, subtaskId?: string) => void;
   onUpdateDependencyStatus: (
     milestoneId: string,
     taskId: string,
@@ -87,6 +91,7 @@ export const TreeView: React.FC<TreeViewProps> = ({
   onReorderSubtasks,
   onMoveSubtask,
   onOpenFollowUpModal,
+  onOpenSessionModal,
   onUpdateDependencyStatus,
   onUpdateDependencyDetails,
   onAdvanceApprovalStage,
@@ -735,6 +740,63 @@ export const TreeView: React.FC<TreeViewProps> = ({
                                                           </>
                                                         )}
                                                       </span>
+                                                    );
+                                                  })()}
+
+                                                  {/* Time Boxing & Execution Sessions Badge */}
+                                                  {(() => {
+                                                    const tMetrics = getSubtaskTimeMetrics(sub);
+                                                    if (
+                                                      tMetrics.estimatedMinutes === 0 &&
+                                                      tMetrics.reservedMinutes === 0
+                                                    ) {
+                                                      return onOpenSessionModal ? (
+                                                        <button
+                                                          onClick={() =>
+                                                            onOpenSessionModal(
+                                                              milestone.id,
+                                                              task.id,
+                                                              sub.id
+                                                            )
+                                                          }
+                                                          className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 border border-transparent hover:border-indigo-200 transition-colors cursor-pointer"
+                                                          title="Reservar Bloco de Foco para esta subtarefa"
+                                                        >
+                                                          <Clock className="w-2.5 h-2.5" />
+                                                          <span>+ Bloco</span>
+                                                        </button>
+                                                      ) : null;
+                                                    }
+
+                                                    return (
+                                                      <button
+                                                        onClick={() =>
+                                                          onOpenSessionModal &&
+                                                          onOpenSessionModal(
+                                                            milestone.id,
+                                                            task.id,
+                                                            sub.id
+                                                          )
+                                                        }
+                                                        className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-mono font-bold border transition-colors cursor-pointer ${
+                                                          tMetrics.activeSession
+                                                            ? 'bg-rose-100 text-rose-800 border-rose-300 animate-pulse'
+                                                            : tMetrics.actualMinutes > 0
+                                                            ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
+                                                            : 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
+                                                        }`}
+                                                        title={`Tempo Estimado: ${tMetrics.estimatedMinutes}m | Reservado: ${tMetrics.reservedMinutes}m | Realizado: ${tMetrics.actualMinutes}m`}
+                                                      >
+                                                        <Clock className="w-2.5 h-2.5" />
+                                                        <span>
+                                                          {tMetrics.reservedMinutes}m / {tMetrics.estimatedMinutes}m
+                                                        </span>
+                                                        {tMetrics.actualMinutes > 0 && (
+                                                          <span className="text-emerald-700 font-semibold">
+                                                            (✓ {tMetrics.actualMinutes}m)
+                                                          </span>
+                                                        )}
+                                                      </button>
                                                     );
                                                   })()}
                                                 </div>

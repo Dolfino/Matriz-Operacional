@@ -1,7 +1,7 @@
 {
   "name": "react-example",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
@@ -9,7 +9,9 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "test:audit": "tsx src/tests/operationalConsistency.test.ts"
+    "test:audit": "tsx src/tests/operationalConsistency.test.ts",
+    "test:temporal": "tsx src/tests/temporalConsistency.test.ts",
+    "test:all": "tsx src/tests/operationalConsistency.test.ts && tsx src/tests/temporalConsistency.test.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

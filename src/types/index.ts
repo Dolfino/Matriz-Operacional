@@ -86,6 +86,50 @@ export type FinancialStatus =
   | 'ENCAMINHADO_PAGAMENTO'
   | 'PAGO';
 
+/**
+ * Sessão de Execução / Bloco de Foco (Time Blocking Operacional)
+ * Relação temporal transversal vinculada à Subtarefa Executável (NÃO é nível hierárquico).
+ */
+export type ExecutionSessionStatus =
+  | 'scheduled'
+  | 'in_progress'
+  | 'completed'
+  | 'cancelled'
+  | 'missed'
+  | 'rescheduled';
+
+export type SessionEventType = 'START' | 'PAUSE' | 'RESUME' | 'COMPLETE' | 'CANCEL' | 'RESCHEDULE';
+
+export interface ExecutionSessionEvent {
+  id: string;
+  type: SessionEventType;
+  timestamp: string; // ISO string ou HH:mm DD/MM
+  note?: string;
+  actor?: string;
+}
+
+export interface ExecutionSession {
+  id: string;
+  subtaskId: string;
+  date: string; // Data civil (YYYY-MM-DD)
+  startTime: string; // Ex: "10:00"
+  endTime: string; // Ex: "10:30"
+  plannedDurationMinutes: number; // Ex: 30 min (tempo reservado na agenda)
+  actualDurationMinutes?: number; // Ex: 24 min (tempo efetivamente consumido)
+  sessionGoal?: string; // Objetivo específico do bloco (ex: "Contatar fornecedores e solicitar propostas")
+  status: ExecutionSessionStatus;
+  notes?: string;
+  completedAt?: string; // Timestamp de conclusão
+
+  // Reagendamento com Preservação de Histórico (Etapa 4.3B)
+  rescheduledFromSessionId?: string; // ID da sessão original reagendada
+  rescheduledToSessionId?: string; // ID da nova sessão criada a partir desta
+  cancellationReason?: 'SUBTASK_COMPLETED' | 'MANUAL' | 'RESCHEDULED' | string;
+
+  // Hardening Etapa 4.3: Histórico Append-only e Eventos de Cronômetro
+  events?: ExecutionSessionEvent[];
+}
+
 export interface Subtask {
   id: string;
   title: string;
@@ -93,12 +137,16 @@ export interface Subtask {
   assignee?: string;
   ocNumber?: string;
   orderCost?: number;
-  financialStatus?: FinancialStatus; // Novo: controle granular de status financeiro
+  financialStatus?: FinancialStatus; // Controle granular de status financeiro
   startDate?: string;
-  dueDate?: string;
+  dueDate?: string; // Prazo de entrega final (até quando precisa estar pronto)
   endDate?: string;
   notes?: string;
   isExternalDependency?: boolean;
+
+  // Time Blocking / Gestão de Tempo Operacional
+  estimatedMinutes?: number; // Tempo total estimado de esforço (quanto trabalho eu tenho)
+  executionSessions?: ExecutionSession[]; // Sessões de execução com horário reservado
 }
 
 export type TaskStatus = 'not_started' | 'in_progress' | 'blocked' | 'completed';

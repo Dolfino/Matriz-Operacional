@@ -51,7 +51,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const currentObjective = objectives.find((o) => o.id === currentObjectiveId) || objectives[0];
   const stats = currentObjective ? getObjectiveStats(currentObjective) : null;
   const schedule = currentObjective ? buildOperationalSchedule(currentObjective, '2026-10-08') : null;
-  const urgentActionsCount = schedule ? schedule.summary.overdueCount + schedule.summary.todayCount : 0;
+  const urgentActionsCount = schedule ? schedule.summary.atrasadoCount + schedule.summary.hojeCount : 0;
 
   return (
     <header className="sticky top-0 z-40 bg-slate-900 border-b border-slate-800 text-white shadow-md">

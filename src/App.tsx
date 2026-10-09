@@ -13,6 +13,9 @@ import {
   DependencyLifecycleState,
   FinancialStatus,
   DependencyHistoryEntry,
+  ExecutionSession,
+  ExecutionSessionStatus,
+  ExecutionSessionEvent,
 } from './types';
 import { loadObjectives, saveObjectives, resetToDefault, exportDataAsJson } from './utils/storage';
 import { createDefaultApprovalStages } from './utils/approvalRules';
@@ -30,6 +33,7 @@ import { GranularityCheckerModal } from './components/GranularityCheckerModal';
 import { FollowUpModal } from './components/FollowUpModal';
 import { ExecutiveSummaryModal } from './components/ExecutiveSummaryModal';
 import { GranularityRuleBanner } from './components/GranularityRuleBanner';
+import { ExecutionSessionModal } from './components/ExecutionSessionModal';
 
 export default function App() {
   const [objectives, setObjectives] = useState<Objective[]>(() => loadObjectives());
@@ -56,6 +60,15 @@ export default function App() {
   const [isFollowUpModalOpen, setIsFollowUpModalOpen] = useState(false);
   const [selectedDependency, setSelectedDependency] = useState<Dependency | null>(null);
   const [selectedTaskTitle, setSelectedTaskTitle] = useState<string>('');
+
+  // Execution Session / Time Blocking modal state
+  const [isSessionModalOpen, setIsSessionModalOpen] = useState(false);
+  const [sessionModalContext, setSessionModalContext] = useState<{
+    milestoneId?: string;
+    taskId?: string;
+    subtaskId?: string;
+    session?: ExecutionSession | null;
+  }>({});
 
   // Persist to storage
   useEffect(() => {
@@ -146,7 +159,32 @@ export default function App() {
                   : s.status === 'pending'
                   ? 'in_progress'
                   : 'completed';
-              return { ...s, status: nextStatus };
+
+              // Invariante TB15: Conclusão da subtarefa cancela blocos futuros PLANNED (com motivo SUBTASK_COMPLETED)
+              let updatedSessions = s.executionSessions || [];
+              if (nextStatus === 'completed' && updatedSessions.length > 0) {
+                const now = new Date().toISOString();
+                updatedSessions = updatedSessions.map((sess) => {
+                  if (sess.status === 'scheduled') {
+                    const cancelEvt: ExecutionSessionEvent = {
+                      id: `evt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                      type: 'CANCEL',
+                      timestamp: now,
+                      note: 'Bloco cancelado automaticamente: subtarefa foi concluída',
+                      actor: 'Sistema/Matriz',
+                    };
+                    return {
+                      ...sess,
+                      status: 'cancelled' as const,
+                      cancellationReason: 'SUBTASK_COMPLETED',
+                      events: [...(sess.events || []), cancelEvt],
+                    };
+                  }
+                  return sess;
+                });
+              }
+
+              return { ...s, status: nextStatus, executionSessions: updatedSessions };
             }),
           };
         }),
@@ -509,6 +547,259 @@ export default function App() {
     );
   };
 
+  // Execution Sessions / Time Blocking Handlers (Etapa 4.2)
+  const handleOpenSessionModal = (
+    milestoneId?: string,
+    taskId?: string,
+    subtaskId?: string,
+    session?: ExecutionSession | null
+  ) => {
+    setSessionModalContext({
+      milestoneId,
+      taskId,
+      subtaskId,
+      session: session || null,
+    });
+    setIsSessionModalOpen(true);
+  };
+
+  const handleSaveExecutionSession = (
+    milestoneId: string,
+    taskId: string,
+    subtaskId: string,
+    session: ExecutionSession
+  ) => {
+    if (!currentObjective) return;
+
+    // Invariante Etapa 4.3: Se a sessão for salva como in_progress, garantir que nenhuma outra esteja in_progress
+    if (session.status === 'in_progress') {
+      let activeOtherSessionTitle: string | null = null;
+      currentObjective.milestones.forEach((m) => {
+        m.tasks.forEach((t) => {
+          t.subtasks.forEach((s) => {
+            (s.executionSessions || []).forEach((sess) => {
+              if (sess.id !== session.id && sess.status === 'in_progress') {
+                activeOtherSessionTitle = s.title;
+              }
+            });
+          });
+        });
+      });
+
+      if (activeOtherSessionTitle) {
+        alert(
+          `Atenção: Apenas UMA Sessão de Execução pode estar em andamento (IN_PROGRESS) por vez.\n\nA sessão da subtarefa "${activeOtherSessionTitle}" já está em execução.\nPausa ou conclua o bloco atual antes de iniciar outro cronômetro.`
+        );
+        return;
+      }
+    }
+
+    const updatedMilestones = currentObjective.milestones.map((m) => {
+      if (m.id !== milestoneId) return m;
+      return {
+        ...m,
+        tasks: m.tasks.map((t) => {
+          if (t.id !== taskId) return t;
+          return {
+            ...t,
+            subtasks: t.subtasks.map((s) => {
+              if (s.id !== subtaskId) return s;
+              const existingSessions = s.executionSessions || [];
+              const exists = existingSessions.some((sess) => sess.id === session.id);
+              const updatedSessions = exists
+                ? existingSessions.map((sess) => (sess.id === session.id ? session : sess))
+                : [...existingSessions, session];
+              return {
+                ...s,
+                executionSessions: updatedSessions,
+              };
+            }),
+          };
+        }),
+      };
+    });
+
+    const updatedObjective: Objective = {
+      ...currentObjective,
+      milestones: updatedMilestones,
+    };
+
+    setObjectives((prev) =>
+      prev.map((o) => (o.id === updatedObjective.id ? updatedObjective : o))
+    );
+  };
+
+  const handleDeleteExecutionSession = (
+    milestoneId: string,
+    taskId: string,
+    subtaskId: string,
+    sessionId: string
+  ) => {
+    if (!currentObjective) return;
+
+    const updatedMilestones = currentObjective.milestones.map((m) => {
+      if (m.id !== milestoneId) return m;
+      return {
+        ...m,
+        tasks: m.tasks.map((t) => {
+          if (t.id !== taskId) return t;
+          return {
+            ...t,
+            subtasks: t.subtasks.map((s) => {
+              if (s.id !== subtaskId) return s;
+              return {
+                ...s,
+                executionSessions: (s.executionSessions || []).filter((sess) => sess.id !== sessionId),
+              };
+            }),
+          };
+        }),
+      };
+    });
+
+    const updatedObjective: Objective = {
+      ...currentObjective,
+      milestones: updatedMilestones,
+    };
+
+    setObjectives((prev) =>
+      prev.map((o) => (o.id === updatedObjective.id ? updatedObjective : o))
+    );
+  };
+
+  const handleUpdateSessionStatus = (
+    milestoneId: string,
+    taskId: string,
+    subtaskId: string,
+    sessionId: string,
+    newStatus: ExecutionSessionStatus,
+    actualMinutes?: number
+  ) => {
+    if (!currentObjective) return;
+
+    // Invariante Etapa 4.3: No máximo UMA Sessão de Execução pode estar IN_PROGRESS simultaneamente
+    if (newStatus === 'in_progress') {
+      let activeOtherSessionTitle: string | null = null;
+      currentObjective.milestones.forEach((m) => {
+        m.tasks.forEach((t) => {
+          t.subtasks.forEach((s) => {
+            (s.executionSessions || []).forEach((sess) => {
+              if (sess.id !== sessionId && sess.status === 'in_progress') {
+                activeOtherSessionTitle = s.title;
+              }
+            });
+          });
+        });
+      });
+
+      if (activeOtherSessionTitle) {
+        alert(
+          `Atenção: Apenas UMA Sessão de Execução pode estar em andamento (IN_PROGRESS) por vez.\n\nA sessão da subtarefa "${activeOtherSessionTitle}" já está em execução.\nPausa ou conclua o bloco atual antes de iniciar outro cronômetro.`
+        );
+        return;
+      }
+    }
+
+    const timestamp = new Date().toISOString();
+    const eventType =
+      newStatus === 'in_progress'
+        ? 'START'
+        : newStatus === 'completed'
+        ? 'COMPLETE'
+        : newStatus === 'cancelled'
+        ? 'CANCEL'
+        : 'PAUSE';
+
+    const newEvent: ExecutionSessionEvent = {
+      id: `evt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      type: eventType,
+      timestamp,
+      note: `Status alterado para ${newStatus.toUpperCase()}`,
+      actor: 'Operações',
+    };
+
+    const updatedMilestones = currentObjective.milestones.map((m) => {
+      if (m.id !== milestoneId) return m;
+      return {
+        ...m,
+        tasks: m.tasks.map((t) => {
+          if (t.id !== taskId) return t;
+          return {
+            ...t,
+            subtasks: t.subtasks.map((s) => {
+              if (s.id !== subtaskId) return s;
+              return {
+                ...s,
+                executionSessions: (s.executionSessions || []).map((sess) => {
+                  if (sess.id !== sessionId) return sess;
+                  const updatedEvents = [...(sess.events || []), newEvent];
+                  return {
+                    ...sess,
+                    status: newStatus,
+                    actualDurationMinutes:
+                      actualMinutes !== undefined ? actualMinutes : sess.actualDurationMinutes,
+                    completedAt:
+                      newStatus === 'completed'
+                        ? sess.completedAt || timestamp
+                        : sess.completedAt,
+                    events: updatedEvents,
+                  };
+                }),
+              };
+            }),
+          };
+        }),
+      };
+    });
+
+    const updatedObjective: Objective = {
+      ...currentObjective,
+      milestones: updatedMilestones,
+    };
+
+    setObjectives((prev) =>
+      prev.map((o) => (o.id === updatedObjective.id ? updatedObjective : o))
+    );
+  };
+
+  const handleUpdateSubtaskEstimate = (
+    milestoneId: string,
+    taskId: string,
+    subtaskId: string,
+    estimatedMinutes: number
+  ) => {
+    if (!currentObjective) return;
+
+    const updatedMilestones = currentObjective.milestones.map((m) => {
+      if (m.id !== milestoneId) return m;
+      return {
+        ...m,
+        tasks: m.tasks.map((t) => {
+          if (t.id !== taskId) return t;
+          return {
+            ...t,
+            subtasks: t.subtasks.map((s) => {
+              if (s.id !== subtaskId) return s;
+              return {
+                ...s,
+                estimatedMinutes,
+              };
+            }),
+          };
+        }),
+      };
+    });
+
+    const updatedObjective: Objective = {
+      ...currentObjective,
+      milestones: updatedMilestones,
+    };
+
+    setObjectives((prev) =>
+      prev.map((o) => (o.id === updatedObjective.id ? updatedObjective : o))
+    );
+  };
+
   // Milestone Actions
   const handleOpenMilestoneModal = (milestone?: Milestone) => {
     setEditingMilestone(milestone || null);
@@ -705,6 +996,7 @@ export default function App() {
             onReorderSubtasks={handleReorderSubtasks}
             onMoveSubtask={handleMoveSubtask}
             onOpenFollowUpModal={handleOpenFollowUpModal}
+            onOpenSessionModal={handleOpenSessionModal}
             onUpdateDependencyStatus={handleUpdateDependencyStatus}
             onUpdateDependencyDetails={handleUpdateDependencyDetails}
             onAdvanceApprovalStage={handleAdvanceApprovalStage}
@@ -752,6 +1044,8 @@ export default function App() {
               handleOpenFollowUpModal(dep, 'Cobrança');
             }}
             onSelectTab={setActiveTab}
+            onOpenSessionModal={handleOpenSessionModal}
+            onUpdateSessionStatus={handleUpdateSessionStatus}
           />
         )}
 
@@ -836,6 +1130,21 @@ export default function App() {
           isOpen={isReportModalOpen}
           onClose={() => setIsReportModalOpen(false)}
           objective={currentObjective}
+        />
+      )}
+
+      {isSessionModalOpen && currentObjective && (
+        <ExecutionSessionModal
+          isOpen={isSessionModalOpen}
+          onClose={() => setIsSessionModalOpen(false)}
+          objective={currentObjective}
+          initialMilestoneId={sessionModalContext.milestoneId}
+          initialTaskId={sessionModalContext.taskId}
+          initialSubtaskId={sessionModalContext.subtaskId}
+          sessionToEdit={sessionModalContext.session}
+          onSaveSession={handleSaveExecutionSession}
+          onDeleteSession={handleDeleteExecutionSession}
+          onUpdateSubtaskEstimate={handleUpdateSubtaskEstimate}
         />
       )}
     </div>
