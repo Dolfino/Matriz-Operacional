@@ -1044,6 +1044,8 @@ export default function App() {
               handleOpenFollowUpModal(dep, 'Cobrança');
             }}
             onSelectTab={setActiveTab}
+            onOpenTaskModal={handleOpenTaskModal}
+            onOpenMilestoneModal={handleOpenMilestoneModal}
             onOpenSessionModal={handleOpenSessionModal}
             onUpdateSessionStatus={handleUpdateSessionStatus}
           />

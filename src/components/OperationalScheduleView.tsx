@@ -21,6 +21,8 @@ import {
   Play,
   Pause,
   Plus,
+  ExternalLink,
+  ArrowUpRight,
 } from 'lucide-react';
 import { Objective, Dependency, ExecutionSession, ExecutionSessionStatus } from '../types';
 import {
@@ -40,6 +42,8 @@ interface OperationalScheduleViewProps {
     actionType?: 'cobrar' | 'followup'
   ) => void;
   onSelectTab: (tab: 'tree' | 'radar' | 'board' | 'ocs' | 'gantt' | 'schedule') => void;
+  onOpenTaskModal?: (milestoneId: string, task?: any) => void;
+  onOpenMilestoneModal?: (milestone?: any) => void;
   onOpenSessionModal?: (
     milestoneId?: string,
     taskId?: string,
@@ -59,6 +63,9 @@ interface OperationalScheduleViewProps {
 export const OperationalScheduleView: React.FC<OperationalScheduleViewProps> = ({
   objective,
   onOpenFollowUpModal,
+  onSelectTab,
+  onOpenTaskModal,
+  onOpenMilestoneModal,
   onOpenSessionModal,
   onUpdateSessionStatus,
 }) => {
@@ -508,7 +515,12 @@ export const OperationalScheduleView: React.FC<OperationalScheduleViewProps> = (
                       <TimelineItemCard
                         key={item.id}
                         item={item}
+                        objective={objective}
                         onOpenFollowUpModal={onOpenFollowUpModal}
+                        onOpenTaskModal={onOpenTaskModal}
+                        onOpenMilestoneModal={onOpenMilestoneModal}
+                        onOpenSessionModal={onOpenSessionModal}
+                        onSelectTab={onSelectTab}
                       />
                     ))}
                   </div>
@@ -539,7 +551,12 @@ export const OperationalScheduleView: React.FC<OperationalScheduleViewProps> = (
                       <TimelineItemCard
                         key={item.id}
                         item={item}
+                        objective={objective}
                         onOpenFollowUpModal={onOpenFollowUpModal}
+                        onOpenTaskModal={onOpenTaskModal}
+                        onOpenMilestoneModal={onOpenMilestoneModal}
+                        onOpenSessionModal={onOpenSessionModal}
+                        onSelectTab={onSelectTab}
                       />
                     ))}
                   </div>
@@ -570,7 +587,12 @@ export const OperationalScheduleView: React.FC<OperationalScheduleViewProps> = (
                       <TimelineItemCard
                         key={item.id}
                         item={item}
+                        objective={objective}
                         onOpenFollowUpModal={onOpenFollowUpModal}
+                        onOpenTaskModal={onOpenTaskModal}
+                        onOpenMilestoneModal={onOpenMilestoneModal}
+                        onOpenSessionModal={onOpenSessionModal}
+                        onSelectTab={onSelectTab}
                       />
                     ))}
                   </div>
@@ -601,7 +623,12 @@ export const OperationalScheduleView: React.FC<OperationalScheduleViewProps> = (
                       <TimelineItemCard
                         key={item.id}
                         item={item}
+                        objective={objective}
                         onOpenFollowUpModal={onOpenFollowUpModal}
+                        onOpenTaskModal={onOpenTaskModal}
+                        onOpenMilestoneModal={onOpenMilestoneModal}
+                        onOpenSessionModal={onOpenSessionModal}
+                        onSelectTab={onSelectTab}
                       />
                     ))}
                   </div>
@@ -622,7 +649,12 @@ export const OperationalScheduleView: React.FC<OperationalScheduleViewProps> = (
                       <TimelineItemCard
                         key={item.id}
                         item={item}
+                        objective={objective}
                         onOpenFollowUpModal={onOpenFollowUpModal}
+                        onOpenTaskModal={onOpenTaskModal}
+                        onOpenMilestoneModal={onOpenMilestoneModal}
+                        onOpenSessionModal={onOpenSessionModal}
+                        onSelectTab={onSelectTab}
                       />
                     ))}
                   </div>
@@ -691,42 +723,75 @@ export const OperationalScheduleView: React.FC<OperationalScheduleViewProps> = (
 
                   {/* Lista de Itens do Responsável */}
                   <div className="mt-3 space-y-2">
-                    {owner.items.map((item) => (
-                      <div
-                        key={item.id}
-                        className="p-2.5 rounded-xl border border-slate-100 bg-slate-50/70 hover:bg-white text-xs space-y-1 transition-colors"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <span className="font-semibold text-slate-900 line-clamp-1">
-                            {item.title}
-                          </span>
-                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold shrink-0 ${item.urgencyBadgeClass}`}>
-                            {item.urgencyLabel}
-                          </span>
+                    {owner.items.map((item) => {
+                      const milestone = objective.milestones.find((m) => m.id === item.milestoneId);
+                      const task = milestone?.tasks.find((t) => t.id === item.taskId);
+
+                      return (
+                        <div
+                          key={item.id}
+                          onClick={() => {
+                            if (item.sourceType === 'dependency_followup' && item.rawDependency) {
+                              onOpenFollowUpModal(item.milestoneId, item.taskId, item.rawDependency, 'cobrar');
+                            } else if ((item.sourceType === 'task_deadline' || item.sourceType === 'subtask_due') && task && onOpenTaskModal) {
+                              onOpenTaskModal(item.milestoneId, task);
+                            } else if (item.sourceType === 'milestone_target' && milestone && onOpenMilestoneModal) {
+                              onOpenMilestoneModal(milestone);
+                            }
+                          }}
+                          className="p-2.5 rounded-xl border border-slate-100 bg-slate-50/70 hover:bg-white hover:border-indigo-300 hover:shadow-xs text-xs space-y-1 transition-all cursor-pointer group"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <span className="font-semibold text-slate-900 line-clamp-1 group-hover:text-indigo-600 transition-colors">
+                              {item.title}
+                            </span>
+                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold shrink-0 ${item.urgencyBadgeClass}`}>
+                              {item.urgencyLabel}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 line-clamp-1">
+                            {item.nextActionOrImpact}
+                          </p>
+                          <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1" onClick={(e) => e.stopPropagation()}>
+                            <span>Data: {item.targetDate}</span>
+                            <div className="flex items-center gap-1.5">
+                              {item.sourceType === 'dependency_followup' && item.rawDependency ? (
+                                <button
+                                  onClick={() => {
+                                    onOpenFollowUpModal(
+                                      item.milestoneId,
+                                      item.taskId,
+                                      item.rawDependency!,
+                                      'cobrar'
+                                    );
+                                  }}
+                                  className="text-indigo-600 font-bold hover:underline flex items-center gap-0.5"
+                                >
+                                  <PhoneCall className="w-3 h-3" /> Cobrar
+                                </button>
+                              ) : task && onOpenTaskModal ? (
+                                <button
+                                  onClick={() => onOpenTaskModal(item.milestoneId, task)}
+                                  className="text-indigo-600 font-bold hover:underline"
+                                >
+                                  Ver Tarefa
+                                </button>
+                              ) : null}
+
+                              {onSelectTab && (
+                                <button
+                                  onClick={() => onSelectTab('tree')}
+                                  className="text-slate-400 hover:text-slate-700 ml-1"
+                                  title="Ver na Árvore Hierárquica"
+                                >
+                                  <ExternalLink className="w-3 h-3" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                        <p className="text-[11px] text-slate-500 line-clamp-1">
-                          {item.nextActionOrImpact}
-                        </p>
-                        <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1">
-                          <span>Data: {item.targetDate}</span>
-                          {item.sourceType === 'dependency_followup' && item.rawDependency && (
-                            <button
-                              onClick={() => {
-                                onOpenFollowUpModal(
-                                  item.milestoneId,
-                                  item.taskId,
-                                  item.rawDependency!,
-                                  'cobrar'
-                                );
-                              }}
-                              className="text-indigo-600 font-bold hover:underline flex items-center gap-0.5"
-                            >
-                              <PhoneCall className="w-3 h-3" /> Cobrar
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -1193,26 +1258,61 @@ const ExecutionSessionBlockCard: React.FC<ExecutionSessionBlockCardProps> = ({
  */
 interface TimelineItemCardProps {
   item: TemporalFollowUpItem;
+  objective: Objective;
   onOpenFollowUpModal: (
     milestoneId: string,
     taskId: string,
     dep: Dependency,
     actionType?: 'cobrar' | 'followup'
   ) => void;
+  onOpenTaskModal?: (milestoneId: string, task?: any) => void;
+  onOpenMilestoneModal?: (milestone?: any) => void;
+  onOpenSessionModal?: (
+    milestoneId?: string,
+    taskId?: string,
+    subtaskId?: string,
+    session?: ExecutionSession
+  ) => void;
+  onSelectTab?: (tab: 'tree' | 'radar' | 'board' | 'ocs' | 'gantt' | 'schedule') => void;
 }
 
 const TimelineItemCard: React.FC<TimelineItemCardProps> = ({
   item,
+  objective,
   onOpenFollowUpModal,
+  onOpenTaskModal,
+  onOpenMilestoneModal,
+  onOpenSessionModal,
+  onSelectTab,
 }) => {
+  // Localiza entidades na matriz
+  const milestone = objective.milestones.find((m) => m.id === item.milestoneId);
+  const task = milestone?.tasks.find((t) => t.id === item.taskId);
+
+  // Ação primária ao clicar no card
+  const handleCardClick = () => {
+    if (item.sourceType === 'dependency_followup' && item.rawDependency) {
+      onOpenFollowUpModal(item.milestoneId, item.taskId, item.rawDependency, 'cobrar');
+    } else if (item.sourceType === 'task_deadline' || item.sourceType === 'subtask_due') {
+      if (task && onOpenTaskModal) {
+        onOpenTaskModal(item.milestoneId, task);
+      }
+    } else if (item.sourceType === 'milestone_target') {
+      if (milestone && onOpenMilestoneModal) {
+        onOpenMilestoneModal(milestone);
+      }
+    }
+  };
+
   return (
     <div
-      className={`p-4 rounded-xl border text-xs space-y-2.5 transition-all ${
+      onClick={handleCardClick}
+      className={`group p-4 rounded-xl border text-xs space-y-2.5 transition-all cursor-pointer relative shadow-2xs hover:shadow-md ${
         item.isBlocking
-          ? 'bg-rose-50/40 border-rose-200 hover:border-rose-300'
+          ? 'bg-rose-50/40 border-rose-200 hover:border-rose-400 hover:bg-rose-50/70'
           : item.category === 'HOJE'
-          ? 'bg-amber-50/30 border-amber-200 hover:border-amber-300'
-          : 'bg-white border-slate-200 hover:border-slate-300'
+          ? 'bg-amber-50/30 border-amber-200 hover:border-amber-400 hover:bg-amber-50/60'
+          : 'bg-white border-slate-200 hover:border-indigo-300 hover:bg-slate-50/70'
       }`}
     >
       {/* Topo do Card */}
@@ -1244,8 +1344,9 @@ const TimelineItemCard: React.FC<TimelineItemCardProps> = ({
               </span>
             )}
           </div>
-          <h4 className="text-xs sm:text-sm font-bold text-slate-900 mt-1">
-            {item.title}
+          <h4 className="text-xs sm:text-sm font-bold text-slate-900 mt-1 group-hover:text-indigo-600 transition-colors flex items-center gap-1">
+            <span>{item.title}</span>
+            <ArrowUpRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity text-indigo-600 shrink-0" />
           </h4>
         </div>
       </div>
@@ -1260,7 +1361,7 @@ const TimelineItemCard: React.FC<TimelineItemCardProps> = ({
         </p>
       </div>
 
-      {/* Metadados e Breadcrumb Hierárquico */}
+      {/* Metadados e Ações Diretas */}
       <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500 pt-1">
         <div className="flex items-center gap-3">
           <span className="flex items-center gap-1 font-semibold text-slate-700">
@@ -1273,30 +1374,80 @@ const TimelineItemCard: React.FC<TimelineItemCardProps> = ({
           </span>
         </div>
 
-        {/* Botão de Cobrança / Follow-up */}
-        {item.sourceType === 'dependency_followup' && item.rawDependency && (
-          <button
-            onClick={() => {
-              onOpenFollowUpModal(
-                item.milestoneId,
-                item.taskId,
-                item.rawDependency!,
-                'cobrar'
-              );
-            }}
-            className="flex items-center gap-1 px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-xs shadow-2xs transition-colors shrink-0"
-          >
-            <PhoneCall className="w-3 h-3" />
-            <span>Registrar Cobrança</span>
-          </button>
-        )}
+        {/* Botões de Ação Imediata (Cobrança, Bloco ou Edição) */}
+        <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+          {item.sourceType === 'dependency_followup' && item.rawDependency ? (
+            <button
+              onClick={() => {
+                onOpenFollowUpModal(
+                  item.milestoneId,
+                  item.taskId,
+                  item.rawDependency!,
+                  'cobrar'
+                );
+              }}
+              className="flex items-center gap-1 px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-xs shadow-2xs transition-colors shrink-0"
+              title="Registrar contato/cobrança e recalcular próxima data"
+            >
+              <PhoneCall className="w-3 h-3" />
+              <span>Registrar Cobrança</span>
+            </button>
+          ) : (item.sourceType === 'task_deadline' || item.sourceType === 'subtask_due') && task ? (
+            <div className="flex items-center gap-1.5">
+              {onOpenSessionModal && (
+                <button
+                  onClick={() => {
+                    onOpenSessionModal(
+                      item.milestoneId,
+                      item.taskId,
+                      item.subtaskId || (task.subtasks[0]?.id)
+                    );
+                  }}
+                  className="flex items-center gap-1 px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg font-bold text-xs transition-colors shrink-0"
+                  title="Agendar Bloco de Foco no calendário para esta tarefa"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>+ Bloco</span>
+                </button>
+              )}
+              {onOpenTaskModal && (
+                <button
+                  onClick={() => onOpenTaskModal(item.milestoneId, task)}
+                  className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg font-bold text-xs transition-colors shrink-0"
+                >
+                  Ver Tarefa
+                </button>
+              )}
+            </div>
+          ) : item.sourceType === 'milestone_target' && milestone && onOpenMilestoneModal ? (
+            <button
+              onClick={() => onOpenMilestoneModal(milestone)}
+              className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-lg font-bold text-xs transition-colors shrink-0"
+            >
+              Ver Marco
+            </button>
+          ) : null}
+
+          {onSelectTab && (
+            <button
+              onClick={() => onSelectTab('tree')}
+              className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+              title="Ir para a Árvore Hierárquica"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Rastreabilidade hierárquica */}
-      <div className="text-[10px] text-slate-400 flex items-center gap-1 truncate pt-1 border-t border-slate-100">
-        <span>{item.milestoneTitle}</span>
-        <ChevronRight className="w-3 h-3 text-slate-300 shrink-0" />
-        <span className="font-semibold text-slate-600 truncate">{item.taskTitle}</span>
+      {/* Rastreabilidade hierárquica clicável */}
+      <div className="text-[10px] text-slate-400 flex items-center justify-between pt-1 border-t border-slate-100">
+        <div className="flex items-center gap-1 truncate">
+          <span className="hover:text-slate-700 font-medium">{item.milestoneTitle}</span>
+          <ChevronRight className="w-3 h-3 text-slate-300 shrink-0" />
+          <span className="font-semibold text-slate-600 truncate hover:text-indigo-600">{item.taskTitle}</span>
+        </div>
+        <span className="text-[9px] text-slate-400 shrink-0 italic">Clique para abrir detalhes</span>
       </div>
     </div>
   );
